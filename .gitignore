@@ -1,0 +1,9 @@
+node_modules
+.next
+out
+dist
+ios
+android
+.env*.local
+npm-debug.log*
+.DS_Store

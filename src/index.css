@@ -1,0 +1,373 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-dm-sans: "DM Sans", system-ui, sans-serif;
+  --font-playfair: "Playfair Display", Georgia, serif;
+  --cream: #faf7f2;
+  --green: #2d5016;
+  --green-light: #4a7c28;
+  --green-pale: #eaf0e0;
+  --orange: #e8621a;
+  --orange-pale: #fdf0e8;
+  --gray: #6b6b6b;
+  --gray-light: #f0ede8;
+  --white: #ffffff;
+  --text: #1a1a1a;
+  --border: #e0dbd4;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--cream);
+  color: var(--text);
+  font-family: var(--font-dm-sans);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+.font-playfair {
+  font-family: var(--font-playfair), serif;
+}
+
+@keyframes onboardingStepEnter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.onboarding-step-enter {
+  animation: onboardingStepEnter 0.28s ease-out;
+}
+
+@keyframes onboardingSlideFromRight {
+  from {
+    opacity: 0;
+    transform: translateX(22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes onboardingSlideFromLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.onboarding-slide-in-right {
+  animation: onboardingSlideFromRight 0.34s ease-out;
+}
+
+.onboarding-slide-in-left {
+  animation: onboardingSlideFromLeft 0.34s ease-out;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes streak-week-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(45, 80, 22, 0.35);
+  }
+  50% {
+    transform: scale(1.12);
+    box-shadow: 0 0 0 10px rgba(45, 80, 22, 0);
+  }
+}
+
+.streak-week-today {
+  animation: streak-week-pulse 2s ease-in-out infinite;
+}
+
+.macro-ring-arc {
+  transition: stroke-dashoffset 1s ease-out;
+}
+
+@keyframes recipe-modal-slide-up {
+  from {
+    opacity: 0.97;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.recipe-modal-overlay {
+  animation: recipe-modal-slide-up 0.4s ease-out forwards;
+}
+
+@keyframes email-gate-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20%,
+  60% {
+    transform: translateX(-6px);
+  }
+  40%,
+  80% {
+    transform: translateX(6px);
+  }
+}
+
+.email-gate-shake {
+  animation: email-gate-shake 0.45s ease-in-out;
+}
+
+@keyframes upgrade-modal-enter {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.upgrade-modal-enter {
+  animation: upgrade-modal-enter 0.35s ease-out forwards;
+}
+
+@keyframes hero-food-float {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(-4deg);
+    opacity: 0.04;
+  }
+  33% {
+    transform: translate(5px, -8px) rotate(2deg);
+    opacity: 0.045;
+  }
+  66% {
+    transform: translate(-4px, 5px) rotate(5deg);
+    opacity: 0.035;
+  }
+}
+
+.hero-food-emoji {
+  opacity: 0.04;
+  animation-name: hero-food-float;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+@keyframes chat-fab-pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+
+.chat-fab-pulse-ring {
+  animation: chat-fab-pulse-ring 3s ease-out infinite;
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulseBorder {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px rgba(45, 80, 22, 1);
+  }
+  50% {
+    box-shadow: 0 0 0 1px rgba(45, 80, 22, 0.5);
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes dotBounce {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes sparkleFloat {
+  from {
+    opacity: 0.95;
+    transform: translate(-50%, 0) scale(0.9);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -18px) scale(1.15);
+  }
+}
+
+@keyframes shimmerSweep {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes tapRipple {
+  from {
+    transform: scale(0.2);
+    opacity: 0.55;
+  }
+  to {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+@keyframes waterDropFloat {
+  from {
+    transform: translateY(0);
+    opacity: 0.95;
+  }
+  to {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+}
+
+@keyframes waterGlassTap {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.3);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes chatBubbleInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes chatBubbleInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes loading-emoji-bounce {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+}
+
+@keyframes buttonPressBounce {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(0.97);
+  }
+  70% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes recipeTimerPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(45, 80, 22, 0.45);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(45, 80, 22, 0);
+    transform: scale(1.03);
+  }
+}
+
+.recipe-modal-timer-btn--active {
+  animation: recipeTimerPulse 1.5s ease-in-out infinite;
+}

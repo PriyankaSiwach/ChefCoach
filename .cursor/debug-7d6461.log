@@ -1,0 +1,8 @@
+{"sessionId":"7d6461","runId":"pre-fix","hypothesisId":"H1","location":"hooks/useCamera.ts:13","message":"camera capability evaluated on client","data":{"hasCamera":true},"timestamp":1777606066192}
+{"sessionId":"7d6461","runId":"pre-fix","hypothesisId":"H1","location":"hooks/useCamera.ts:13","message":"camera capability evaluated on client","data":{"hasCamera":true},"timestamp":1777606066193}
+{"sessionId":"7d6461","runId":"pre-fix","hypothesisId":"H2","location":"hooks/useLocalStorage.ts:13","message":"localStorage value loaded","data":{"key":"recipify_favs","hasRaw":true},"timestamp":1777606074426}
+{"sessionId":"7d6461","runId":"pre-fix","hypothesisId":"H2","location":"components/RecipifyApp.tsx:34","message":"app hydration-sensitive state snapshot","data":{"favouritesCount":0,"hasImage":false,"activeTab":"main"},"timestamp":1777606074427}
+{"sessionId":"7d6461","runId":"pre-fix","hypothesisId":"H2","location":"components/RecipifyApp.tsx:34","message":"app hydration-sensitive state snapshot","data":{"favouritesCount":0,"hasImage":false,"activeTab":"main"},"timestamp":1777606074428}
+{"sessionId":"7d6461","runId":"pre-fix","hypothesisId":"H2","location":"hooks/useLocalStorage.ts:13","message":"localStorage value loaded","data":{"key":"recipify_favs","hasRaw":true},"timestamp":1777606074428}
+{"sessionId":"7d6461","runId":"pre-fix","hypothesisId":"H2","location":"hooks/useLocalStorage.ts:13","message":"localStorage value loaded","data":{"key":"recipify_favs","hasRaw":true},"timestamp":1777606080413}
+{"sessionId":"7d6461","runId":"pre-fix","hypothesisId":"H2","location":"hooks/useLocalStorage.ts:13","message":"localStorage value loaded","data":{"key":"recipify_favs","hasRaw":true},"timestamp":1777606080413}
