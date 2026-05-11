@@ -1,6 +1,5 @@
 
 import { useEffect, useMemo, useState } from "react";
-import { apiUrl } from "@/lib/apiBase";
 import { saveEmailGateSubmission } from "@/lib/trial";
 import type { UserProfile } from "@/types";
 import { readProfileFromStorage } from "@/lib/profileStorage";
@@ -116,15 +115,6 @@ export function EmailGate({ onComplete }: Props) {
     const run = async () => {
       setLoading(true);
       const normalized = email.trim().toLowerCase();
-      try {
-        await fetch(apiUrl("/api/clerk-sync"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: normalized }),
-        });
-      } catch {
-        // non-blocking: local signup still proceeds
-      }
       saveEmailGateSubmission(normalized);
       window.setTimeout(() => {
         setLoading(false);
@@ -139,15 +129,6 @@ export function EmailGate({ onComplete }: Props) {
     const run = async () => {
       setLoading(true);
       const syntheticEmail = `${provider}_user_${Date.now()}@recipify.app`;
-      try {
-        await fetch(apiUrl("/api/clerk-sync"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: syntheticEmail }),
-        });
-      } catch {
-        // non-blocking: local signup still proceeds
-      }
       saveEmailGateSubmission(syntheticEmail);
       window.setTimeout(() => {
         setLoading(false);

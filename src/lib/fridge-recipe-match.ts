@@ -197,6 +197,16 @@ export function matchRecipesFromIngredients(
   );
 }
 
+function aiRecipePassesDiet(itemDiet: string, diet: DietFilter): boolean {
+  if (diet === "None") return true;
+  const id = itemDiet.toLowerCase();
+  if (diet === "Vegetarian") return id.includes("vegetarian") || id.includes("vegan");
+  if (diet === "Vegan") return id.includes("vegan");
+  if (diet === "Gluten-free") return id.includes("gluten");
+  if (diet === "Keto") return id.includes("keto");
+  return true;
+}
+
 /** Client-side filter for cook tab (diet + max cook time). */
 export function filterRecipeResults(
   items: RecipeResultItem[],
@@ -211,7 +221,7 @@ export function filterRecipeResults(
         const max = time === "15" ? 15 : time === "30" ? 30 : 60;
         if (mins > max) return false;
       }
-      return diet === "None";
+      return aiRecipePassesDiet(item.diet, diet);
     }
     if (!mealPassesDietFilter(meal, diet)) return false;
     if (!mealPassesTimeFilter(meal, time)) return false;

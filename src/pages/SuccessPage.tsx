@@ -1,15 +1,14 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { refreshProFromRevenueCat } from "@/lib/revenueCat";
 
+/** Optional post-purchase screen; Pro status comes from RevenueCat / local sync. */
 export function SuccessPage() {
   const navigate = useNavigate();
   const [count, setCount] = useState(3);
 
   useEffect(() => {
-    localStorage.setItem("recipify_is_pro", "true");
-    localStorage.setItem("recipify_trial_active", "true");
-    localStorage.setItem("recipify_trial_started", new Date().toISOString());
-    localStorage.setItem("recipify_total_scans", "0");
+    void refreshProFromRevenueCat();
 
     const countdown = setInterval(() => {
       setCount((c) => {
@@ -62,15 +61,15 @@ export function SuccessPage() {
         }}
       >
         <p style={{ fontSize: "16px", marginBottom: "8px", opacity: 0.9 }}>
-          ✓ 3-day free trial started
+          ✓ Subscription synced via RevenueCat
         </p>
         <p style={{ fontSize: "16px", marginBottom: "8px", opacity: 0.9 }}>
-          ✓ Unlimited scans unlocked
+          ✓ Unlimited scans when Pro is active
         </p>
-        <p style={{ fontSize: "16px", opacity: 0.9 }}>✓ Full macro tracking active</p>
+        <p style={{ fontSize: "16px", opacity: 0.9 }}>✓ Full macro tracking &amp; recipes</p>
       </div>
       <p style={{ fontSize: "14px", opacity: 0.7, marginBottom: "8px" }}>
-        No charge for 3 days. Cancel anytime.
+        Manage your plan in the App Store subscriptions settings.
       </p>
       <p style={{ fontSize: "13px", opacity: 0.5 }}>Redirecting in {count}...</p>
     </div>

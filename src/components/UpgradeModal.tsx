@@ -1,32 +1,32 @@
 
 import { useState } from "react";
-import { apiUrl } from "@/lib/apiBase";
+import { presentRevenueCatPaywall } from "@/lib/revenueCat";
 
 type Props = {
   open: boolean;
   onClose: () => void;
+  /** Supabase user id — forwarded to RevenueCat as `appUserID`. */
+  appUserId: string | null;
 };
 
-export function UpgradeModal({ open, onClose }: Props) {
+export function UpgradeModal({ open, onClose, appUserId }: Props) {
   const [loading, setLoading] = useState(false);
 
   const handleUpgrade = async () => {
     try {
       setLoading(true);
-      const email =
-        typeof window !== "undefined" ? window.localStorage.getItem("recipify_email") || "" : "";
-      const res = await fetch(apiUrl("/api/create-checkout"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-      if (!res.ok) throw new Error("Unable to start checkout.");
-      const { url } = (await res.json()) as { url?: string };
-      if (!url) throw new Error("Checkout URL missing.");
-      window.location.href = url;
+      const result = await presentRevenueCatPaywall(appUserId);
+      if (!result.ok) {
+        if (!result.userCancelled) {
+          alert(result.error);
+        }
+        return;
+      }
+      onClose();
     } catch (error) {
+      alert(error instanceof Error ? error.message : "Purchase could not be completed.");
+    } finally {
       setLoading(false);
-      alert(error instanceof Error ? error.message : "Unable to start checkout.");
     }
   };
 
@@ -60,7 +60,7 @@ export function UpgradeModal({ open, onClose }: Props) {
             You've used your 3 free scans
           </h2>
           <p className="mt-2 text-sm text-white/90">
-            Upgrade to keep scanning and unlock everything - free for 3 days, then $8.99/month
+            Upgrade to keep scanning and unlock everything — billed through the App Store (RevenueCat).
           </p>
         </div>
 
@@ -94,7 +94,7 @@ export function UpgradeModal({ open, onClose }: Props) {
               Most popular
             </span>
             <p className="font-playfair text-lg text-[var(--green)]">Pro</p>
-            <p className="text-sm font-semibold text-[var(--text)]">$8.99/month</p>
+            <p className="text-sm font-semibold text-[var(--text)]">Via Apple In-App Purchase</p>
             <ul className="mt-3 space-y-2 text-xs text-[var(--text)]">
               <li className="flex gap-2">
                 <span className="text-[var(--green)]">✓</span> Unlimited fridge scans
@@ -128,13 +128,14 @@ export function UpgradeModal({ open, onClose }: Props) {
             disabled={loading}
             className="w-full rounded-[14px] bg-[var(--green)] py-4 font-playfair text-lg text-white transition hover:bg-[var(--green-light)] disabled:opacity-70"
           >
-            {loading ? "Opening checkout..." : "Start Free - 3 Days on Us 🎉"}
+            {loading ? "Opening paywall…" : "Subscribe with Apple 🍎"}
           </button>
           <p className="mt-2 text-center text-xs text-[var(--gray)]">
-            Enter your card today - you won&apos;t be charged for 3 days.
+            On iPhone or iPad, confirm with Face ID, Touch ID, or your Apple ID. Manage or cancel in Settings →
+            Subscriptions.
           </p>
           <p className="mt-2 text-center text-[11px] text-[var(--gray)]">
-            🔒 Secured by Stripe • Cancel anytime
+            Powered by RevenueCat • Apple In-App Purchase
           </p>
           <button
             type="button"

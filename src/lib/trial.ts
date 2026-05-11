@@ -3,6 +3,36 @@ const KEY_SCANS = "recipify_trial_scans";
 const KEY_STARTED = "recipify_trial_started";
 const KEY_ENDED = "recipify_trial_ended";
 
+/** Fridge-scan / trial paywall bypass (case-insensitive). */
+const SCAN_LIMIT_BYPASS_EMAIL = "priyankasiwach214@gmail.com";
+
+function isDevEnvironment(): boolean {
+  try {
+    if (import.meta.env?.DEV === true) return true;
+    if (import.meta.env?.MODE === "development") return true;
+  } catch {
+    /* ignore */
+  }
+  try {
+    if (typeof process !== "undefined" && process.env?.NODE_ENV === "development") return true;
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
+/**
+ * When true: do not enforce the 3-scan trial, do not lock recipes for trial, do not consume scans.
+ * Active in Vite dev, when `NODE_ENV === 'development'`, or for {@link SCAN_LIMIT_BYPASS_EMAIL}.
+ */
+export function isTrialScanBypassActive(sessionEmail?: string | null): boolean {
+  if (isDevEnvironment()) return true;
+  const fromSession = sessionEmail?.trim().toLowerCase() ?? "";
+  const fromLs = getStoredEmail()?.trim().toLowerCase() ?? "";
+  const email = fromSession || fromLs;
+  return email === SCAN_LIMIT_BYPASS_EMAIL.toLowerCase();
+}
+
 export function getStoredEmail(): string | null {
   if (typeof window === "undefined") return null;
   try {
@@ -48,6 +78,7 @@ export function setTrialScansRemaining(n: number): void {
 }
 
 export function getTrialEnded(): boolean {
+  if (isTrialScanBypassActive()) return false;
   if (typeof window === "undefined") return false;
   try {
     return window.localStorage.getItem(KEY_ENDED) === "true";
@@ -68,6 +99,7 @@ export function setTrialEnded(value: boolean): void {
 
 /** After a successful recipe generation: decrement scans. Returns new remaining count. */
 export function consumeTrialScan(): number {
+  if (isTrialScanBypassActive()) return getTrialScansRemaining();
   const before = getTrialScansRemaining();
   const next = Math.max(0, before - 1);
   setTrialScansRemaining(next);
@@ -77,6 +109,7 @@ export function consumeTrialScan(): number {
 /** If trial scans hit zero but flag wasn’t set (e.g. refresh), lock the paywall. */
 export function migrateTrialState(): void {
   if (typeof window === "undefined") return;
+  if (isTrialScanBypassActive()) return;
   if (!getStoredEmail()) return;
   if (getTrialScansRemaining() > 0) return;
   if (!getTrialEnded()) {

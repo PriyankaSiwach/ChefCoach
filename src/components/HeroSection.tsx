@@ -94,32 +94,6 @@ export function HeroSection() {
             ✨ Fresh ideas every scan
           </span>
         </div>
-
-        <div className="mt-8 flex items-center justify-center gap-3">
-          <div className="flex shrink-0 items-center pl-1">
-            <span
-              className="relative z-[3] flex h-9 w-9 items-center justify-center rounded-full border-2 border-[var(--green)] bg-[#6b8f4e] text-xs font-semibold text-[var(--cream)] shadow-sm"
-              aria-hidden
-            >
-              S
-            </span>
-            <span
-              className="relative z-[2] -ml-3 flex h-9 w-9 items-center justify-center rounded-full border-2 border-[var(--green)] bg-[#8b7355] text-xs font-semibold text-[var(--cream)] shadow-sm"
-              aria-hidden
-            >
-              M
-            </span>
-            <span
-              className="relative z-[1] -ml-3 flex h-9 w-9 items-center justify-center rounded-full border-2 border-[var(--green)] bg-[#5a7a8c] text-xs font-semibold text-[var(--cream)] shadow-sm"
-              aria-hidden
-            >
-              J
-            </span>
-          </div>
-          <p className="text-left text-[13px] font-light leading-snug text-[var(--cream)]">
-            2,400+ people eating smarter this week
-          </p>
-        </div>
       </div>
     </section>
   );

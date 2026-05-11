@@ -42,6 +42,8 @@ function ingredientAllergenWarning(
 
 type Props = {
   ingredients: string[];
+  /** True when user has uploaded a fridge photo (ingredients may still be empty until scan). */
+  hasUploadedPhoto: boolean;
   loading: boolean;
   onRemoveIngredient: (ingredient: string) => void;
   onAddIngredient: (ingredient: string) => void;
@@ -52,6 +54,7 @@ type Props = {
 
 export function IngredientsFound({
   ingredients,
+  hasUploadedPhoto,
   loading,
   onRemoveIngredient,
   onAddIngredient,
@@ -69,59 +72,71 @@ export function IngredientsFound({
     return () => window.clearTimeout(id);
   }, [clickTick]);
 
-  if (!ingredients.length) return null;
+  if (!hasUploadedPhoto && !ingredients.length) return null;
 
   return (
     <section className="mx-auto mb-6 max-w-[600px] px-6">
-      <div className="rounded-xl bg-[var(--green-pale)] p-4">
-        <h4 className="mb-2 text-xs font-medium uppercase tracking-wider text-[var(--green)]">
-          🥦 Ingredients detected
-        </h4>
-        <div className="flex flex-wrap gap-2">
-          {ingredients.map((ingredient) => {
-            const warn = ingredientAllergenWarning(ingredient, userAllergens);
-            return (
+      <div className="flex flex-col gap-4">
+        {ingredients.length > 0 ? (
+          <div className="flex flex-col gap-4">
+            <h4 className="text-xs font-medium uppercase tracking-wider text-[var(--green)]">
+              🥦 Ingredients detected
+            </h4>
+            <div className="flex flex-wrap gap-2">
+              {ingredients.map((ingredient) => {
+                const warn = ingredientAllergenWarning(ingredient, userAllergens);
+                return (
+                  <button
+                    key={ingredient}
+                    type="button"
+                    className={`rounded-full border px-3 py-1 text-sm ${
+                      warn
+                        ? "border-red-300 bg-red-50 text-red-800"
+                        : "border-[#C5D8A0] bg-[var(--white)] text-[var(--green)]"
+                    }`}
+                    onClick={() => onRemoveIngredient(ingredient)}
+                    title="Remove ingredient"
+                  >
+                    {ingredient}
+                    {warn ? (
+                      <span className="ml-1 inline-flex items-center rounded bg-red-100 px-1 text-[10px] font-semibold text-red-700">
+                        ⚠️ {warn}
+                      </span>
+                    ) : null}{" "}
+                    ✕
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                value={draftIngredient}
+                onChange={(e) => setDraftIngredient(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    if (!draftIngredient.trim()) return;
+                    onAddIngredient(draftIngredient);
+                    setDraftIngredient("");
+                  }
+                }}
+                className="flex-1 rounded-full border border-[var(--border)] bg-[var(--white)] px-4 py-2 text-sm outline-none"
+                placeholder="Add ingredient"
+              />
               <button
-                key={ingredient}
                 type="button"
-                className={`rounded-full border px-3 py-1 text-sm ${
-                  warn
-                    ? "border-red-300 bg-red-50 text-red-800"
-                    : "border-[#C5D8A0] bg-[var(--white)] text-[var(--green)]"
-                }`}
-                onClick={() => onRemoveIngredient(ingredient)}
-                title="Remove ingredient"
+                className="rounded-full border border-[var(--border)] bg-[var(--white)] px-4 py-2 text-sm text-[var(--green)]"
+                onClick={() => {
+                  if (!draftIngredient.trim()) return;
+                  onAddIngredient(draftIngredient);
+                  setDraftIngredient("");
+                }}
               >
-                {ingredient}
-                {warn ? (
-                  <span className="ml-1 inline-flex items-center rounded bg-red-100 px-1 text-[10px] font-semibold text-red-700">
-                    ⚠️ {warn}
-                  </span>
-                ) : null}{" "}
-                ✕
+                Add
               </button>
-            );
-          })}
-        </div>
-        <div className="mt-4 flex items-center gap-2">
-          <input
-            value={draftIngredient}
-            onChange={(e) => setDraftIngredient(e.target.value)}
-            className="flex-1 rounded-full border border-[var(--border)] bg-[var(--white)] px-4 py-2 text-sm outline-none"
-            placeholder="Add ingredient"
-          />
-          <button
-            type="button"
-            className="rounded-full border border-[var(--border)] bg-[var(--white)] px-4 py-2 text-sm text-[var(--green)]"
-            onClick={() => {
-              if (!draftIngredient.trim()) return;
-              onAddIngredient(draftIngredient);
-              setDraftIngredient("");
-            }}
-          >
-            Add
-          </button>
-        </div>
+            </div>
+          </div>
+        ) : null}
         <button
           type="button"
           onClick={(e) => {
@@ -136,7 +151,7 @@ export function IngredientsFound({
           }}
           onMouseEnter={() => setSparkleTick(Date.now())}
           disabled={loading}
-          className="relative mt-4 w-full overflow-hidden rounded-full bg-[var(--green)] px-6 py-3 font-playfair text-lg text-white transition hover:brightness-110 disabled:opacity-80"
+          className="relative w-full overflow-hidden rounded-full bg-[var(--green)] px-6 py-3 font-playfair text-lg text-white transition hover:brightness-110 disabled:opacity-80"
           style={{
             animation: loading
               ? "shimmerSweep 2s linear infinite"

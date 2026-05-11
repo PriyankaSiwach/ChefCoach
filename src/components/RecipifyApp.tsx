@@ -5,7 +5,8 @@ import type { DietFilter, Recipe, TimeFilter, UserProfile } from "@/types";
 import { useFavourites } from "@/hooks/useFavourites";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { detectFridgeIngredients } from "@/lib/openai";
-import { filterRecipeResults, matchRecipesFromIngredients } from "@/lib/fridge-recipe-match";
+import { fetchCookRecipesFromApi } from "@/lib/cook-recipes-api";
+import { filterRecipeResults } from "@/lib/fridge-recipe-match";
 import { BottomNavigation } from "./BottomNavigation";
 import { CameraUploadSection } from "./CameraUploadSection";
 import { CookTimeFilterSection } from "./CookTimeFilterSection";
@@ -29,14 +30,15 @@ import {
 } from "@/lib/gamification";
 import type { RecipeResultItem } from "@/types";
 import { useToast } from "./Toast";
-import { EmailGate } from "./EmailGate";
 import { TrialCookBanner } from "./TrialCookBanner";
+import { useAuth } from "@/contexts/AuthContext";
+import { deleteRemoteProfile, upsertProfileToSupabase } from "@/lib/profileSupabase";
 import { UpgradeModal } from "./UpgradeModal";
-import { WhatToCookNowCard } from "./WhatToCookNowCard";
 import {
   consumeTrialScan,
   getTrialEnded,
   getTrialScansRemaining,
+  isTrialScanBypassActive,
   migrateTrialState,
   setTrialEnded as persistTrialEnded,
 } from "@/lib/trial";
@@ -56,7 +58,7 @@ export function RecipifyApp() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ingredients, setIngredients] = useState<string[]>([]);
-  /** Full ranked pool from hardcoded library after scan (before diet/time filter). */
+  /** Cook tab: recipes from /api/cook-recipes (before diet/time chip filter). */
   const [matchedRecipePool, setMatchedRecipePool] = useState<RecipeResultItem[]>([]);
 
   const recipes = useMemo(
@@ -76,14 +78,19 @@ export function RecipifyApp() {
   const { favourites, toggleFavourite, clearFavourites } = useFavourites();
   const showToast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
-  const clearedStripeCancel = useRef(false);
+  const clearedCheckoutCancelToast = useRef(false);
 
   const [celebrationQueue, setCelebrationQueue] = useState<AchievementUnlock[]>([]);
 
   const [gateChecked, setGateChecked] = useState(false);
-  const [hasEmail, setHasEmail] = useState(false);
+  const { user, signOut } = useAuth();
   const [trialEnded, setTrialEnded] = useState(false);
   const [isPro, setIsPro] = useState(false);
+  const trialBypass = useMemo(
+    () => isTrialScanBypassActive(user?.email ?? undefined),
+    [user?.email]
+  );
+  const effectivePro = isPro || trialBypass;
   const [graceAfterThirdScan, setGraceAfterThirdScan] = useState(false);
   const [trialUiTick, setTrialUiTick] = useState(0);
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
@@ -93,7 +100,6 @@ export function RecipifyApp() {
     if (typeof window === "undefined") return;
     try {
       const pro = window.localStorage.getItem("recipify_is_pro") === "true";
-      setHasEmail(Boolean(window.localStorage.getItem("recipify_email")));
       setIsPro(pro);
       migrateTrialState();
       setTrialEnded(getTrialEnded());
@@ -109,9 +115,19 @@ export function RecipifyApp() {
   }, []);
 
   useEffect(() => {
-    if (!gateChecked || clearedStripeCancel.current) return;
+    if (!user?.id || !profileReady || profile === null) return;
+    const t = window.setTimeout(() => {
+      void upsertProfileToSupabase(user.id, profile).then(({ error }) => {
+        if (error) console.warn("Profile sync:", error);
+      });
+    }, 800);
+    return () => window.clearTimeout(t);
+  }, [profile, profileReady, user?.id]);
+
+  useEffect(() => {
+    if (!gateChecked || clearedCheckoutCancelToast.current) return;
     if (searchParams.get("cancelled") === "true") {
-      clearedStripeCancel.current = true;
+      clearedCheckoutCancelToast.current = true;
       showToast("No worries! You still have your 3 free scans.", "info");
       const next = new URLSearchParams(searchParams);
       next.delete("cancelled");
@@ -122,7 +138,20 @@ export function RecipifyApp() {
   useEffect(() => {
     if (typeof window === "undefined" || !gateChecked) return;
     setTrialEnded(getTrialEnded());
-  }, [gateChecked, trialUiTick]);
+  }, [gateChecked, trialUiTick, user?.email]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onSub = () => {
+      try {
+        setIsPro(window.localStorage.getItem("recipify_is_pro") === "true");
+      } catch {
+        /* ignore */
+      }
+    };
+    window.addEventListener("recipify-subscription-changed", onSub);
+    return () => window.removeEventListener("recipify-subscription-changed", onSub);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -187,10 +216,15 @@ export function RecipifyApp() {
       }
       setIngredients(detectedIngredients);
 
-      const matched = matchRecipesFromIngredients(detectedIngredients, profile);
+      const matched = await fetchCookRecipesFromApi({
+        ingredients: detectedIngredients,
+        dietaryPreference: selectedDiet,
+        maxCookTime: selectedTime,
+        profile,
+      });
       setMatchedRecipePool(matched);
 
-      if (!isPro) {
+      if (!effectivePro) {
         const beforeRemaining = getTrialScansRemaining();
         const afterRemaining = consumeTrialScan();
         setTrialUiTick((t) => t + 1);
@@ -238,18 +272,6 @@ export function RecipifyApp() {
     return <div className="min-h-screen bg-[var(--cream)]" aria-busy />;
   }
 
-  if (!hasEmail) {
-    return (
-      <EmailGate
-        onComplete={() => {
-          setHasEmail(true);
-          setTrialEnded(getTrialEnded());
-          setTrialUiTick((t) => t + 1);
-        }}
-      />
-    );
-  }
-
   /* Full onboarding only when no saved profile (first-time); returning users always have profile after hydrate */
   if (!shouldSkipOnboarding && !profile) {
     return (
@@ -263,9 +285,9 @@ export function RecipifyApp() {
   }
 
   const recipesLocked =
-    !isPro && recipes.length > 0 && trialEnded && !graceAfterThirdScan;
+    !effectivePro && recipes.length > 0 && trialEnded && !graceAfterThirdScan;
   const showTrialEndedBanner =
-    !isPro && recipes.length > 0 && trialEnded && !graceAfterThirdScan;
+    !effectivePro && recipes.length > 0 && trialEnded && !graceAfterThirdScan;
   const openUpgrade = () => setUpgradeModalOpen(true);
 
   return (
@@ -277,7 +299,7 @@ export function RecipifyApp() {
         profileAvatarDataUri={profile?.avatarDataUri ?? undefined}
       />
 
-      {activeTab === "cook" && !isPro ? (
+      {activeTab === "cook" && !effectivePro ? (
         <TrialCookBanner
           scansRemaining={getTrialScansRemaining()}
           trialEnded={trialEnded}
@@ -298,16 +320,6 @@ export function RecipifyApp() {
             />
           </div>
 
-          <WhatToCookNowCard
-            profile={profile}
-            selectedTime={selectedTime}
-            selectedDiet={selectedDiet}
-            onApplySuggestedFilters={(time, dietTag) => {
-              setSelectedTime(time);
-              if (dietTag) setSelectedDiet(dietTag);
-            }}
-          />
-
           <div style={{ animation: "fadeInUp 0.5s ease both", animationDelay: "0.2s" }}>
             <DietaryPreferencesSection
               selectedDiet={selectedDiet}
@@ -324,6 +336,7 @@ export function RecipifyApp() {
               error={error}
               loading={loading}
               ingredients={ingredients}
+              hasUploadedPhoto={Boolean(currentImage)}
               recipes={recipes}
               matchedRecipePoolCount={matchedRecipePool.length}
               favourites={favourites}
@@ -400,6 +413,10 @@ export function RecipifyApp() {
               setActiveTab("cook");
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}
+            onLogout={() => void signOut()}
+            onDeleteRemoteProfile={
+              user?.id ? async () => deleteRemoteProfile(user.id) : undefined
+            }
           />
         ) : (
           <section className="mx-auto max-w-[920px] px-5 py-8 pb-24">
@@ -437,6 +454,7 @@ export function RecipifyApp() {
       <UpgradeModal
         open={upgradeModalOpen}
         onClose={() => setUpgradeModalOpen(false)}
+        appUserId={user?.id ?? null}
       />
       {showEditProfile && profile ? (
         <EditProfileScreen

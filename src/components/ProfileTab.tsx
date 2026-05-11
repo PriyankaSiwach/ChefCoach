@@ -174,6 +174,9 @@ type Props = {
   onEditProfile: () => void;
   /** Opens Cook tab (same as bottom nav scan fridge). */
   onGoToCook?: () => void;
+  onLogout?: () => void | Promise<void>;
+  /** Clears cloud profile row so “reset” does not re-pull old data on reload. */
+  onDeleteRemoteProfile?: () => Promise<void>;
 };
 
 const DAILY_QUOTES = [
@@ -354,7 +357,13 @@ function LoggedMealRow({
   );
 }
 
-export function ProfileTab({ profile, onEditProfile, onGoToCook }: Props) {
+export function ProfileTab({
+  profile,
+  onEditProfile,
+  onGoToCook,
+  onLogout,
+  onDeleteRemoteProfile,
+}: Props) {
   const showToast = useToast();
 
   // Auto-assign today's meals on mount — deterministic per day, different tomorrow
@@ -840,7 +849,16 @@ export function ProfileTab({ profile, onEditProfile, onGoToCook }: Props) {
         </div>
       </section>
 
-      <section className="mx-auto max-w-[920px] px-5 pt-8 pb-28 text-center md:pb-12">
+      <section className="mx-auto max-w-[920px] space-y-4 px-5 pt-8 pb-28 text-center md:pb-12">
+        {onLogout ? (
+          <button
+            type="button"
+            onClick={() => void onLogout()}
+            className="block w-full rounded-full border border-[var(--border)] py-2.5 text-sm font-medium text-[var(--text)] transition hover:bg-[var(--gray-light)]"
+          >
+            Log out
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={() => setResetConfirmOpen(true)}
@@ -875,8 +893,15 @@ export function ProfileTab({ profile, onEditProfile, onGoToCook }: Props) {
               <button
                 type="button"
                 onClick={() => {
-                  clearRecipifyLocalSession();
-                  window.location.reload();
+                  void (async () => {
+                    try {
+                      if (onDeleteRemoteProfile) await onDeleteRemoteProfile();
+                    } catch {
+                      /* ignore */
+                    }
+                    clearRecipifyLocalSession();
+                    window.location.reload();
+                  })();
                 }}
                 className="flex-1 rounded-full bg-[var(--green)] py-2.5 text-sm font-semibold text-white"
               >

@@ -31,6 +31,7 @@ type Props = {
   error: string | null;
   loading: boolean;
   ingredients: string[];
+  hasUploadedPhoto: boolean;
   recipes: RecipeResultItem[];
   /** Pool size before diet/time filter — used for empty-filter messaging */
   matchedRecipePoolCount: number;
@@ -51,6 +52,7 @@ export function RecipeResultsSection({
   error,
   loading,
   ingredients,
+  hasUploadedPhoto,
   recipes,
   matchedRecipePoolCount,
   favourites,
@@ -79,6 +81,7 @@ export function RecipeResultsSection({
 
       <IngredientsFound
         ingredients={ingredients}
+        hasUploadedPhoto={hasUploadedPhoto}
         loading={loading}
         onRemoveIngredient={onRemoveIngredient}
         onAddIngredient={onAddIngredient}
@@ -95,7 +98,7 @@ export function RecipeResultsSection({
         {matchedRecipePoolCount > 0 && recipes.length === 0 && ingredients.length > 0 ? (
           <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             No recipes match your current <strong>diet</strong> and <strong>cook time</strong> filters.
-            Adjust the chips above or tap &quot;Apply filter&quot; on the suggestion card to see matches again.
+            Adjust the diet and cook time chips above to see matches again.
           </div>
         ) : null}
         {recipes.length ? (
