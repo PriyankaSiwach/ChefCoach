@@ -1,5 +1,6 @@
 
 import { useState } from "react";
+import { BrandLogo } from "@/components/BrandLogo";
 
 type Props = {
   activeTab: "cook" | "saved" | "plan" | "profile";
@@ -23,9 +24,7 @@ export function Header({
   return (
     <>
       <header className="sticky top-0 z-50 flex items-center justify-between bg-[var(--green)] px-6 py-4">
-        <div className="font-playfair text-2xl text-[var(--cream)]">
-          Recipi<span className="text-[#A8D46F]">fy</span>
-        </div>
+        <BrandLogo />
         <button
           type="button"
           className="rounded-full border border-white/35 px-3 py-1 text-2xl leading-none text-[var(--cream)] md:hidden"

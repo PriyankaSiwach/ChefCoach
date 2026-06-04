@@ -49,7 +49,7 @@ export function SuccessPage() {
           lineHeight: 1.2,
         }}
       >
-        Welcome to Recipify Pro!
+        Welcome to ChefCoach Pro!
       </h1>
       <div
         style={{

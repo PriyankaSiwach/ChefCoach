@@ -52,15 +52,42 @@ export async function runCookRecipes(body) {
   const allergies = Array.isArray(body.allergies)
     ? body.allergies.filter((x) => typeof x === "string" && x.trim())
     : [];
+  const dislikedFoods = Array.isArray(body.dislikedFoods)
+    ? body.dislikedFoods.filter((x) => typeof x === "string" && x.trim())
+    : [];
+  const dietaryRestrictionsPrompt =
+    typeof body.dietaryRestrictionsPrompt === "string"
+      ? body.dietaryRestrictionsPrompt.trim()
+      : "";
 
   const cap = cookTimeMinutesCap(maxCookTime);
   const timeRule =
     cap == null ? "No strict time limit." : `Active cook + prep must fit within about ${cap} minutes total.`;
 
-  const allergyLine =
-    allergies.length > 0
-      ? `User avoids these allergens (do not include; warn in allergyWarning if cross-contact risk): ${allergies.join(", ")}.`
-      : "No specific allergens listed.";
+  const restrictionLine =
+    dietaryRestrictionsPrompt ||
+    (() => {
+      const parts = [];
+      if (dietaryPreference !== "None") {
+        parts.push(`User is ${dietaryPreference.toLowerCase()}`);
+      }
+      if (allergies.length) {
+        parts.push(`allergic to ${allergies.join(", ").toLowerCase()}`);
+      }
+      if (dislikedFoods.length) {
+        parts.push(`dislikes ${dislikedFoods.join(", ").toLowerCase()}`);
+      }
+      if (!parts.length) return "No specific dietary restrictions listed.";
+      return `${parts.join(", ")} — never include these in any recipe suggestions.`;
+    })();
+
+  const dietRules = [];
+  if (dietaryPreference === "Halal") {
+    dietRules.push("No pork, bacon, ham, or alcohol in any recipe or step.");
+  }
+  if (dietaryPreference === "Pescatarian") {
+    dietRules.push("No meat or poultry; fish and seafood are allowed.");
+  }
 
   const prompt = `You suggest practical home recipes. Output ONLY valid JSON (no markdown).
 
@@ -71,9 +98,10 @@ Rules:
 - Return exactly 3 to 5 recipes in "recipes".
 - Each recipe must primarily use ingredients from the user's list; matchedIngredients must be a subset of those ingredient strings (case-insensitive OK but copy wording from list when possible).
 - Respect dietary preference: ${dietaryPreference}.
+${dietRules.length ? `- ${dietRules.join("\n- ")}` : ""}
 - ${timeRule}
 - User goal: ${goal}. Tailor goalReason (e.g. higher protein for build_muscle, lighter for lose_weight).
-- ${allergyLine}
+- Dietary restrictions: ${restrictionLine}
 - Numbers for calories and macros should be realistic per serving for one main portion.
 - Titles must be unique.
 

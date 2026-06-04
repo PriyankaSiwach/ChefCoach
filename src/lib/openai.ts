@@ -16,9 +16,7 @@ export async function detectFridgeIngredients(
     throw new Error("Missing OpenAI key. Set VITE_OPENAI_API_KEY in .env.local.");
   }
 
-  const profileNote = profile
-    ? ` User dietary preference: ${profile.dietaryPreference}. Flagged allergies (also avoid suggesting these as detected items when obvious): ${profile.allergies.filter((a) => a !== "None").join(", ") || "none"}.${profilePromptExtras(profile)}`
-    : "";
+  const profileNote = profile ? profilePromptExtras(profile) : "";
 
   const prompt = `You analyze fridge / pantry photos. Respond with ONLY valid JSON (no markdown):
 {"ingredients":["item1","item2","item3"]}

@@ -34,12 +34,48 @@ function normaliseAllergen(raw: string): Allergen | null {
   return map[s] ?? null;
 }
 
-/** Map DietFilter to meal tags that must be present for a positive match. */
-function dietToTag(diet: DietFilter): string | null {
-  if (diet === "Vegetarian") return "vegetarian";
-  if (diet === "Vegan") return "vegan";
-  if (diet === "Gluten-free") return "gluten-free";
-  return null; // None / Keto — no mandatory tag filter
+const LAND_MEAT_RE =
+  /\b(chicken|beef|pork|lamb|bacon|mince|steak|ribs|burger|chorizo|turkey|duck)\b/i;
+const PORK_RE = /\b(pork|bacon|ham|chorizo|prosciutto|salami|pepperoni)\b/i;
+const ALCOHOL_RE = /\b(wine|beer|sake|mirin|sherry|brandy|rum|vodka|liqueur)\b/i;
+
+function mealTextBlob(meal: Meal): string {
+  const ingredients = MEAL_INGREDIENTS[meal.name] ?? [];
+  return `${meal.name} ${meal.description} ${meal.steps.join(" ")} ${ingredients.join(" ")}`.toLowerCase();
+}
+
+function mealContainsLandMeat(meal: Meal): boolean {
+  return LAND_MEAT_RE.test(mealTextBlob(meal));
+}
+
+function mealContainsPork(meal: Meal): boolean {
+  return PORK_RE.test(mealTextBlob(meal));
+}
+
+function mealContainsAlcohol(meal: Meal): boolean {
+  return ALCOHOL_RE.test(mealTextBlob(meal));
+}
+
+function mealContainsFish(meal: Meal): boolean {
+  return meal.allergens.includes("fish") || /\bfish\b|\bsalmon\b|\btuna\b|\btrout\b|\bcod\b/.test(mealTextBlob(meal));
+}
+
+export function mealSatisfiesDietLabel(meal: Meal, diet: DietFilter): boolean {
+  if (diet === "None") return true;
+  if (diet === "Keto") return meal.tags.includes("keto");
+  if (diet === "Vegetarian") {
+    return meal.tags.includes("vegetarian") || meal.tags.includes("vegan");
+  }
+  if (diet === "Vegan") return meal.tags.includes("vegan");
+  if (diet === "Gluten-free") return meal.tags.includes("gluten-free");
+  if (diet === "Pescatarian") {
+    if (meal.tags.includes("vegan") || meal.tags.includes("vegetarian")) return true;
+    return !mealContainsLandMeat(meal);
+  }
+  if (diet === "Halal") {
+    return !mealContainsPork(meal) && !mealContainsAlcohol(meal);
+  }
+  return true;
 }
 
 /**
@@ -60,16 +96,18 @@ export function isSafeForUser(meal: Meal, profile: UserProfile): boolean {
   const hasDietRestriction = diets.some((d) => d !== "None");
 
   if (hasDietRestriction) {
-    // Meal must satisfy ALL selected diet labels
-    const ok = diets.every((d) => {
-      const tag = dietToTag(d as DietFilter);
-      if (!tag) return true; // Keto / unknown — no tag filter
-      return (meal.tags as string[]).includes(tag);
-    });
+    const ok = diets.every((d) => mealSatisfiesDietLabel(meal, d as DietFilter));
     if (!ok) return false;
   }
 
   // ── Allergen filter ───────────────────────────────────────────────────────
+  for (const raw of profile.allergies ?? []) {
+    if (!raw || raw === "None") continue;
+    const lower = raw.toLowerCase().trim();
+    if (lower === "pork" && mealContainsPork(meal)) return false;
+    if (lower === "fish" && mealContainsFish(meal)) return false;
+  }
+
   const userAllergens = (profile.allergies ?? [])
     .map(normaliseAllergen)
     .filter((a): a is Allergen => a !== null && a !== ("None" as Allergen));

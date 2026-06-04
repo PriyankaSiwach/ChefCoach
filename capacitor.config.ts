@@ -2,7 +2,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
   appId: "com.recipify.app",
-  appName: "Recipify",
+  appName: "ChefCoach",
   webDir: "dist",
   ios: {
     contentInset: "automatic",

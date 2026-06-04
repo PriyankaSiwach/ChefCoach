@@ -371,3 +371,37 @@ body {
 .recipe-modal-timer-btn--active {
   animation: recipeTimerPulse 1.5s ease-in-out infinite;
 }
+
+@keyframes login-shake {
+  0%, 100% { transform: translateX(0); }
+  15%, 45%, 75% { transform: translateX(-7px); }
+  30%, 60%, 90% { transform: translateX(7px); }
+}
+
+.login-form-shake {
+  animation: login-shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+@keyframes spin-cw {
+  to { transform: rotate(360deg); }
+}
+
+.login-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin-cw 0.65s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.app-loading-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(45, 80, 22, 0.2);
+  border-top-color: var(--green);
+  border-radius: 50%;
+  animation: spin-cw 0.65s linear infinite;
+}

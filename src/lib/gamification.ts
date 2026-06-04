@@ -468,8 +468,8 @@ export function getAchievementDisplay(): AchievementStore {
 }
 
 export function dayHasMealLog(dateStr: string): boolean {
-  const t = readDailyTotals(dateStr);
-  return t.calories > 0 || t.protein > 0;
+  const d = readDailyLog(dateStr);
+  return d.entries.length > 0 || d.calories > 0 || d.protein > 0;
 }
 
 /** Monday–Sunday week containing `date`, as YYYY-MM-DD strings (local). */

@@ -1,6 +1,6 @@
 import type { CookingSkill, HealthFocusId, UserProfile, UserSex } from "@/types";
 
-/** Single source of truth for persisted profile (see onboarding / RecipifyApp). */
+/** Single source of truth for persisted profile (see onboarding / main app shell). */
 export const RECIPIFY_PROFILE_STORAGE_KEY = "recipifyProfile";
 
 export const LEGACY_RECIPIFY_PROFILE_STORAGE_KEY = "recipify_profile";

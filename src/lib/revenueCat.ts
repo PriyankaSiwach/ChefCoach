@@ -1,43 +1,51 @@
 import { Capacitor } from "@capacitor/core";
 import type { CustomerInfo } from "@revenuecat/purchases-capacitor";
-import { Purchases, LOG_LEVEL } from "@revenuecat/purchases-capacitor";
-import { RevenueCatUI, PAYWALL_RESULT } from "@revenuecat/purchases-capacitor-ui";
 
 const ENTITLEMENT_ID =
   (import.meta.env.VITE_REVENUECAT_ENTITLEMENT_ID as string | undefined)?.trim() || "pro";
+
+type PurchasesModule = typeof import("@revenuecat/purchases-capacitor");
+type RevenueCatUIModule = typeof import("@revenuecat/purchases-capacitor-ui");
+
+let purchasesMod: PurchasesModule | null = null;
+let uiMod: RevenueCatUIModule | null = null;
+let configured = false;
 
 /** RevenueCat entitlement id (e.g. `pro`) — matches dashboard & `customerInfo.entitlements.active[id]`. */
 export function getRevenueCatEntitlementId(): string {
   return ENTITLEMENT_ID;
 }
 
-let configured = false;
-
 export function isRevenueCatPurchasePlatform(): boolean {
   const p = Capacitor.getPlatform();
   return p === "ios" || p === "android";
 }
 
-/**
- * Call once at app root on launch (before or alongside auth).
- * Sets SDK log level in development, then `Purchases.configure` with the platform API key if not already configured.
- * When the user signs in, {@link syncRevenueCatUser} will `logIn` with the Supabase id without re-configuring.
- */
-export async function initializeRevenueCatSdkOnLaunch(): Promise<void> {
-  if (!isRevenueCatPurchasePlatform()) return;
-  const apiKey = apiKeyForPlatform();
-  if (!apiKey) return;
-  try {
-    if (import.meta.env.DEV) {
-      await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
+/** Lazy-load native SDK — never imported on web so localhost dev stays stable. */
+async function getPurchases(): Promise<PurchasesModule | null> {
+  if (!isRevenueCatPurchasePlatform()) return null;
+  if (!purchasesMod) {
+    try {
+      purchasesMod = await import("@revenuecat/purchases-capacitor");
+    } catch (e) {
+      console.warn("[RevenueCat] Purchases SDK unavailable:", e);
+      return null;
     }
-    if (!configured) {
-      await Purchases.configure({ apiKey });
-      configured = true;
-    }
-  } catch {
-    /* ignore */
   }
+  return purchasesMod;
+}
+
+async function getRevenueCatUI(): Promise<RevenueCatUIModule | null> {
+  if (!isRevenueCatPurchasePlatform()) return null;
+  if (!uiMod) {
+    try {
+      uiMod = await import("@revenuecat/purchases-capacitor-ui");
+    } catch (e) {
+      console.warn("[RevenueCat] Paywall UI unavailable:", e);
+      return null;
+    }
+  }
+  return uiMod;
 }
 
 function apiKeyForPlatform(): string | null {
@@ -53,7 +61,27 @@ function apiKeyForPlatform(): string | null {
   return null;
 }
 
-/** True if the configured entitlement is in `entitlements.active` (same as `typeof active[id] !== "undefined"` + active). */
+export async function initializeRevenueCatSdkOnLaunch(): Promise<void> {
+  if (!isRevenueCatPurchasePlatform()) return;
+  const apiKey = apiKeyForPlatform();
+  if (!apiKey) return;
+  try {
+    const mod = await getPurchases();
+    if (!mod) return;
+    const { Purchases, LOG_LEVEL } = mod;
+    if (import.meta.env.DEV) {
+      await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
+    }
+    if (!configured) {
+      await Purchases.configure({ apiKey });
+      configured = true;
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+/** True if the configured entitlement is in `entitlements.active`. */
 export function entitlementActive(info: CustomerInfo): boolean {
   const active = info.entitlements?.active;
   if (!active || typeof active[ENTITLEMENT_ID] === "undefined") return false;
@@ -79,6 +107,10 @@ async function ensurePurchasesReady(appUserId: string | null): Promise<boolean> 
   const apiKey = apiKeyForPlatform();
   if (!apiKey) return false;
 
+  const mod = await getPurchases();
+  if (!mod) return false;
+  const { Purchases } = mod;
+
   if (!configured) {
     await Purchases.configure({
       apiKey,
@@ -92,15 +124,13 @@ async function ensurePurchasesReady(appUserId: string | null): Promise<boolean> 
   return true;
 }
 
-/**
- * Configure RevenueCat (once) and associate the Supabase user id.
- * No-op on web / missing API key.
- */
 export async function syncRevenueCatUser(appUserId: string | null): Promise<void> {
   const ok = await ensurePurchasesReady(appUserId);
   if (!ok) return;
   try {
-    const { customerInfo } = await Purchases.getCustomerInfo();
+    const mod = await getPurchases();
+    if (!mod) return;
+    const { customerInfo } = await mod.Purchases.getCustomerInfo();
     applyProFromCustomerInfo(customerInfo);
   } catch {
     /* ignore */
@@ -110,7 +140,9 @@ export async function syncRevenueCatUser(appUserId: string | null): Promise<void
 export async function refreshProFromRevenueCat(): Promise<void> {
   if (!configured) return;
   try {
-    const { customerInfo } = await Purchases.getCustomerInfo();
+    const mod = await getPurchases();
+    if (!mod) return;
+    const { customerInfo } = await mod.Purchases.getCustomerInfo();
     applyProFromCustomerInfo(customerInfo);
   } catch {
     /* ignore */
@@ -120,7 +152,9 @@ export async function refreshProFromRevenueCat(): Promise<void> {
 export async function revenueCatLogOut(): Promise<void> {
   if (!configured) return;
   try {
-    const { customerInfo } = await Purchases.logOut();
+    const mod = await getPurchases();
+    if (!mod) return;
+    const { customerInfo } = await mod.Purchases.logOut();
     applyProFromCustomerInfo(customerInfo);
   } catch {
     /* ignore */
@@ -133,15 +167,11 @@ export type PurchaseProResult =
   | { ok: true }
   | { ok: false; error: string; userCancelled?: boolean };
 
-/**
- * Presents the RevenueCat dashboard paywall (`RevenueCatUI.presentPaywall`), then refreshes
- * `Purchases.getCustomerInfo()` and syncs `recipify_is_pro` from {@link getRevenueCatEntitlementId}.
- */
 export async function presentRevenueCatPaywall(appUserId: string | null): Promise<PurchaseProResult> {
   if (!isRevenueCatPurchasePlatform()) {
     return {
       ok: false,
-      error: "Subscribe in the Recipify iOS app with your Apple ID to unlock Pro.",
+      error: "Subscribe in the ChefCoach iOS app with your Apple ID to unlock Pro.",
     };
   }
   const apiKey = apiKeyForPlatform();
@@ -152,6 +182,14 @@ export async function presentRevenueCatPaywall(appUserId: string | null): Promis
   try {
     await ensurePurchasesReady(appUserId);
 
+    const ui = await getRevenueCatUI();
+    const purchases = await getPurchases();
+    if (!ui || !purchases) {
+      return { ok: false, error: "Subscription SDK is not available on this device." };
+    }
+
+    const { RevenueCatUI, PAYWALL_RESULT } = ui;
+    const { Purchases } = purchases;
     const { result } = await RevenueCatUI.presentPaywall();
 
     switch (result) {
@@ -185,4 +223,3 @@ export async function presentRevenueCatPaywall(appUserId: string | null): Promis
     };
   }
 }
-

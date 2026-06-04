@@ -1,6 +1,6 @@
 
-import type { UserProfile } from "@/types";
-import { readProfileFromStorage } from "@/lib/profileStorage";
+
+import { replyOfflineDietCoach } from "@/lib/chat-coach-offline";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type ChatRole = "user" | "assistant";
@@ -11,140 +11,10 @@ type ChatMessage = {
   content: string;
 };
 
-const MODEL = "gpt-4o-mini";
 const CHAT_SEEN_KEY = "recipify_chat_seen";
 
-function todayKey() {
-  return `recipify_daily_${new Date().toISOString().slice(0, 10)}`;
-}
-
-function loadProfile(): UserProfile | null {
-  return readProfileFromStorage();
-}
-
-function loadDailyLog(): { calories: number; protein: number; carbs: number; fat: number } {
-  if (typeof window === "undefined") {
-    return { calories: 0, protein: 0, carbs: 0, fat: 0 };
-  }
-  try {
-    const raw = window.localStorage.getItem(todayKey());
-    if (!raw) return { calories: 0, protein: 0, carbs: 0, fat: 0 };
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    return {
-      calories: Number(parsed.calories) || 0,
-      protein: Number(parsed.protein) || 0,
-      carbs: Number(parsed.carbs) || 0,
-      fat: Number(parsed.fat) || 0,
-    };
-  } catch {
-    return { calories: 0, protein: 0, carbs: 0, fat: 0 };
-  }
-}
-
-function computeTargets(profile: UserProfile) {
-  const activityMult: Record<UserProfile["activityLevel"], number> = {
-    sedentary: 1.2,
-    light: 1.375,
-    gym_regular: 1.55,
-    athlete: 1.725,
-  };
-  const bmr =
-    profile.sex === "male"
-      ? 10 * profile.weightKg + 6.25 * profile.heightCm - 5 * profile.age + 5
-      : profile.sex === "female"
-        ? 10 * profile.weightKg + 6.25 * profile.heightCm - 5 * profile.age - 161
-        : 10 * profile.weightKg + 6.25 * profile.heightCm - 5 * profile.age;
-
-  let calories = Math.round(bmr * activityMult[profile.activityLevel]);
-  if (profile.goal === "lose_weight") calories -= 300;
-  if (profile.goal === "build_muscle") calories += 300;
-
-  let split = { p: 0.25, c: 0.5, f: 0.25 };
-  if (profile.goal === "lose_weight") split = { p: 0.35, c: 0.35, f: 0.3 };
-  if (profile.goal === "build_muscle") split = { p: 0.3, c: 0.45, f: 0.25 };
-
-  return {
-    calories,
-    protein: Math.round((calories * split.p) / 4),
-    carbs: Math.round((calories * split.c) / 4),
-    fat: Math.round((calories * split.f) / 9),
-  };
-}
-
-function goalLabel(goal: UserProfile["goal"]) {
-  if (goal === "lose_weight") return "lose weight";
-  if (goal === "build_muscle") return "build muscle";
-  return "maintain weight";
-}
-
-function buildSystemPrompt(profile: UserProfile | null): string {
-  const name = profile?.name?.trim() || "friend";
-  const defaults = {
-    calories: 2000,
-    protein: 120,
-    carbs: 200,
-    fat: 65,
-    diet: "No restriction",
-    allergies: "none",
-    goalText: "balanced nutrition",
-  };
-
-  const targets = profile ? computeTargets(profile) : defaults;
-  const diet = profile?.dietaryPreference ?? defaults.diet;
-  const allergies =
-    profile?.allergies?.filter(Boolean).join(", ") || defaults.allergies;
-  const goalText = profile ? goalLabel(profile.goal) : defaults.goalText;
-  const logged = loadDailyLog();
-
-  return `You are a warm, encouraging personal diet coach for ${name}. Goal: ${goalText}. Daily target: ${targets.calories} kcal, ${targets.protein}g protein, ${targets.carbs}g carbs, ${targets.fat}g fat.
-Diet: ${diet}. Allergies: ${allergies}.
-Today logged: ${logged.calories} kcal so far.
-Keep responses friendly, under 80 words unless asked for a recipe. Use emojis sparingly.`;
-}
-
-async function callDietCoach(
-  history: ChatMessage[],
-  userText: string
-): Promise<string> {
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY || "";
-  if (!apiKey) {
-    throw new Error("Missing OpenAI key. Set VITE_OPENAI_API_KEY in .env.local.");
-  }
-
-  const profile = loadProfile();
-  const systemPrompt = buildSystemPrompt(profile);
-
-  const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
-    { role: "system", content: systemPrompt },
-    ...history.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
-    { role: "user", content: userText },
-  ];
-
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 600,
-      messages,
-    }),
-  });
-
-  if (!response.ok) {
-    const err = (await response.json().catch(() => ({}))) as {
-      error?: { message?: string };
-    };
-    throw new Error(err.error?.message ?? "Chat request failed.");
-  }
-
-  const data = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  const text = data.choices?.[0]?.message?.content?.trim() ?? "";
-  return text || "I'm here if you need anything else!";
+function callDietCoach(_history: ChatMessage[], userText: string): Promise<string> {
+  return Promise.resolve(replyOfflineDietCoach(userText));
 }
 
 export function ChatBot() {
@@ -235,7 +105,7 @@ export function ChatBot() {
             <div className="flex shrink-0 items-start justify-between gap-2 rounded-t-[20px] bg-[#2D5016] px-4 py-3 text-[var(--cream)]">
               <div>
                 <p className="font-semibold">🥗 Diet Assistant</p>
-                <p className="text-xs text-white/85">Tips tailored to your goals</p>
+                <p className="text-xs text-white/85">Tips from your meal library</p>
               </div>
               <button
                 type="button"

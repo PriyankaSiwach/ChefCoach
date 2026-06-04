@@ -1,4 +1,5 @@
 import type { DietFilter, TimeFilter } from "@/types";
+import { COOK_DIET_FILTER_OPTIONS } from "@/lib/dietConstants";
 
 type Props = {
   selectedDiet: DietFilter;
@@ -6,14 +7,6 @@ type Props = {
   onDietChange: (diet: DietFilter) => void;
   onTimeChange: (time: TimeFilter) => void;
 };
-
-const diets: Array<{ label: string; value: DietFilter }> = [
-  { label: "🍽️ No filter", value: "None" },
-  { label: "🌿 Vegetarian", value: "Vegetarian" },
-  { label: "🥦 Vegan", value: "Vegan" },
-  { label: "🥩 Keto", value: "Keto" },
-  { label: "🌾 Gluten-free", value: "Gluten-free" },
-];
 
 const times: Array<{ label: string; value: TimeFilter }> = [
   { label: "⏱ Any time", value: "any" },
@@ -34,7 +27,7 @@ export function FilterBar({
         Dietary preference
       </div>
       <div className="flex gap-2 overflow-x-auto pb-2">
-        {diets.map((d) => (
+        {COOK_DIET_FILTER_OPTIONS.map((d) => (
           <button
             key={d.value}
             className={`whitespace-nowrap rounded-full border px-4 py-2 text-xs ${

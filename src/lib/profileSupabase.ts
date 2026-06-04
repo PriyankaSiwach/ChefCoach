@@ -1,5 +1,5 @@
 import type { UserProfile } from "@/types";
-import { supabase } from "@/lib/supabaseClient.js";
+import { supabase } from "@/lib/supabaseClient";
 import { normalizeUserProfile, RECIPIFY_PROFILE_STORAGE_KEY } from "@/lib/profileStorage";
 
 /** Pull `profiles.profile_data` into localStorage and notify listeners. */

@@ -80,6 +80,8 @@ export type DietFilter =
   | "Vegetarian"
   | "Vegan"
   | "Keto"
-  | "Gluten-free";
+  | "Gluten-free"
+  | "Pescatarian"
+  | "Halal";
 
 export type TimeFilter = "any" | "15" | "30" | "60";

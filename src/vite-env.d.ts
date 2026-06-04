@@ -12,6 +12,8 @@ interface ImportMetaEnv {
   readonly VITE_REVENUECAT_ANDROID_API_KEY?: string;
   /** Entitlement identifier configured in RevenueCat (default: `pro`) */
   readonly VITE_REVENUECAT_ENTITLEMENT_ID?: string;
+  readonly VITE_TERMS_OF_SERVICE_URL?: string;
+  readonly VITE_PRIVACY_POLICY_URL?: string;
 }
 
 interface ImportMeta {

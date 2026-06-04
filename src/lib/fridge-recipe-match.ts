@@ -4,6 +4,7 @@ import {
   getSafeMeals,
   isSafeForUser,
   mealHealthFocusScore,
+  mealSatisfiesDietLabel,
 } from "@/lib/mealFilter";
 import type { Meal } from "@/lib/mealLibrary";
 import { MEAL_LIBRARY } from "@/lib/mealLibrary";
@@ -130,13 +131,7 @@ function mealToResult(
 }
 
 export function mealPassesDietFilter(meal: Meal, diet: DietFilter): boolean {
-  if (diet === "None") return true;
-  if (diet === "Vegetarian")
-    return meal.tags.includes("vegetarian") || meal.tags.includes("vegan");
-  if (diet === "Vegan") return meal.tags.includes("vegan");
-  if (diet === "Gluten-free") return meal.tags.includes("gluten-free");
-  if (diet === "Keto") return meal.tags.includes("keto");
-  return true;
+  return mealSatisfiesDietLabel(meal, diet);
 }
 
 export function mealPassesTimeFilter(meal: Meal, time: TimeFilter): boolean {
@@ -204,6 +199,10 @@ function aiRecipePassesDiet(itemDiet: string, diet: DietFilter): boolean {
   if (diet === "Vegan") return id.includes("vegan");
   if (diet === "Gluten-free") return id.includes("gluten");
   if (diet === "Keto") return id.includes("keto");
+  if (diet === "Pescatarian") {
+    return id.includes("pescatarian") || id.includes("vegetarian") || id.includes("vegan") || id.includes("fish");
+  }
+  if (diet === "Halal") return !id.includes("pork") && !id.includes("bacon");
   return true;
 }
 

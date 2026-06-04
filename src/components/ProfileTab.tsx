@@ -400,6 +400,7 @@ export function ProfileTab({
   const [manualC, setManualC] = useState("");
   const [manualF, setManualF] = useState("");
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const dailyQuote = DAILY_QUOTES[new Date().getDay() % DAILY_QUOTES.length];
 
@@ -573,7 +574,7 @@ export function ProfileTab({
         <div className="rounded-xl border-l-[3px] border-[var(--green)] bg-[var(--cream)] p-4">
           <p className="text-2xl leading-none text-[var(--green)]">&ldquo;</p>
           <p className="mt-1 text-[14px] italic leading-relaxed text-[var(--text)]">{dailyQuote}</p>
-          <p className="mt-3 text-right text-xs text-[var(--gray)]">— Recipify</p>
+          <p className="mt-3 text-right text-xs text-[var(--gray)]">— ChefCoach</p>
         </div>
       </section>
 
@@ -728,8 +729,13 @@ export function ProfileTab({
               let circleClass =
                 "flex items-center justify-center rounded-full text-[10px] font-semibold sm:h-9 sm:w-9 h-8 w-8 transition-colors ";
               if (isToday) {
-                circleClass +=
-                  "bg-[var(--green)] text-white border-2 border-[var(--green)] streak-week-today relative z-[1]";
+                if (logged) {
+                  circleClass +=
+                    "bg-[var(--orange)] text-white border-2 border-[var(--orange)] shadow-sm relative z-[1]";
+                } else {
+                  circleClass +=
+                    "bg-[var(--green)] text-white border-2 border-[var(--green)] streak-week-today relative z-[1]";
+                }
               } else if (isPast) {
                 if (logged) {
                   circleClass +=
@@ -751,7 +757,13 @@ export function ProfileTab({
                     {logged ? "✓" : ""}
                   </div>
                   {isToday ? (
-                    <span className="text-[9px] font-semibold uppercase text-[var(--green)]">Today</span>
+                    <span
+                      className={`text-[9px] font-semibold uppercase ${
+                        logged ? "text-[var(--orange)]" : "text-[var(--green)]"
+                      }`}
+                    >
+                      Today
+                    </span>
                   ) : (
                     <span className="text-[9px] opacity-0" aria-hidden>
                       ·
@@ -849,14 +861,18 @@ export function ProfileTab({
         </div>
       </section>
 
-      <section className="mx-auto max-w-[920px] space-y-4 px-5 pt-8 pb-28 text-center md:pb-12">
+      <section className="mx-auto max-w-[920px] space-y-4 px-5 pt-8 pb-[calc(7rem+env(safe-area-inset-bottom,0px))] text-center md:pb-12">
         {onLogout ? (
           <button
             type="button"
-            onClick={() => void onLogout()}
-            className="block w-full rounded-full border border-[var(--border)] py-2.5 text-sm font-medium text-[var(--text)] transition hover:bg-[var(--gray-light)]"
+            disabled={loggingOut}
+            onClick={() => {
+              setLoggingOut(true);
+              void Promise.resolve(onLogout()).finally(() => setLoggingOut(false));
+            }}
+            className="block w-full rounded-full border border-[var(--border)] py-2.5 text-sm font-medium text-[var(--text)] transition hover:bg-[var(--gray-light)] disabled:opacity-60"
           >
-            Log out
+            {loggingOut ? "Logging out…" : "Log out"}
           </button>
         ) : null}
         <button

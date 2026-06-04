@@ -1,12 +1,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import type { DietFilter, Recipe, TimeFilter, UserProfile } from "@/types";
 import { useFavourites } from "@/hooks/useFavourites";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { detectFridgeIngredients } from "@/lib/openai";
-import { fetchCookRecipesFromApi } from "@/lib/cook-recipes-api";
-import { filterRecipeResults } from "@/lib/fridge-recipe-match";
+import { filterRecipeResults, matchRecipesFromIngredients } from "@/lib/fridge-recipe-match";
 import { BottomNavigation } from "./BottomNavigation";
 import { CameraUploadSection } from "./CameraUploadSection";
 import { CookTimeFilterSection } from "./CookTimeFilterSection";
@@ -58,7 +57,7 @@ export function RecipifyApp() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ingredients, setIngredients] = useState<string[]>([]);
-  /** Cook tab: recipes from /api/cook-recipes (before diet/time chip filter). */
+  /** Cook tab: hardcoded meal library matches (after vision scan). */
   const [matchedRecipePool, setMatchedRecipePool] = useState<RecipeResultItem[]>([]);
 
   const recipes = useMemo(
@@ -77,6 +76,7 @@ export function RecipifyApp() {
   );
   const { favourites, toggleFavourite, clearFavourites } = useFavourites();
   const showToast = useToast();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const clearedCheckoutCancelToast = useRef(false);
 
@@ -216,12 +216,8 @@ export function RecipifyApp() {
       }
       setIngredients(detectedIngredients);
 
-      const matched = await fetchCookRecipesFromApi({
-        ingredients: detectedIngredients,
-        dietaryPreference: selectedDiet,
-        maxCookTime: selectedTime,
-        profile,
-      });
+      // Only OpenAI call: ingredient vision. Recipes come from the hardcoded meal library.
+      const matched = matchRecipesFromIngredients(detectedIngredients, profile);
       setMatchedRecipePool(matched);
 
       if (!effectivePro) {
@@ -243,6 +239,18 @@ export function RecipifyApp() {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      showToast("Logged out", "info");
+    } catch (e) {
+      console.warn("[Auth] Logout:", e);
+      showToast("Could not sign out fully — try again", "info");
+    } finally {
+      navigate("/login", { replace: true });
     }
   };
 
@@ -413,7 +421,7 @@ export function RecipifyApp() {
               setActiveTab("cook");
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}
-            onLogout={() => void signOut()}
+            onLogout={() => void handleLogout()}
             onDeleteRemoteProfile={
               user?.id ? async () => deleteRemoteProfile(user.id) : undefined
             }
@@ -438,7 +446,7 @@ export function RecipifyApp() {
       )}
 
       <footer className="border-t border-[var(--border)] px-6 py-6 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] text-center text-xs text-[var(--gray)] md:pb-6">
-        Recipify — Made with ❤️ and your leftovers
+        ChefCoach — Made with ❤️ and your leftovers
       </footer>
       <BottomNavigation
         activeTab={activeTab}

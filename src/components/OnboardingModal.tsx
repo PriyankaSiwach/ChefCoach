@@ -9,14 +9,18 @@ import {
   normalizeCuisineLabel,
   RECIPIFY_PROFILE_STORAGE_KEY,
 } from "@/lib/profileStorage";
+import { ALLERGY_OPTIONS, DIETARY_STYLE_OPTIONS, isDietStyleOption } from "@/lib/dietConstants";
+import { upsertProfileToSupabase } from "@/lib/profileSupabase";
+import { useAuth } from "@/contexts/AuthContext";
+import { AllergySafetyNotice } from "@/components/AllergySafetyNotice";
 
 type Props = {
   initialProfile?: UserProfile | null;
   onComplete: (profile: UserProfile) => void;
 };
 
-const allergies = ["Nuts", "Dairy", "Eggs", "Shellfish", "Soy", "Gluten", "None"];
-const dietaryStyles = ["Vegetarian", "Vegan", "Keto", "Gluten-free"];
+const allergies = [...ALLERGY_OPTIONS];
+const dietaryStyles = [...DIETARY_STYLE_OPTIONS];
 const CUISINES = [
   "🇮🇹 Italian",
   "🇮🇳 Indian",
@@ -100,11 +104,12 @@ function initialDietStyleKey(profile: UserProfile | null | undefined): string | 
   if (!profile?.dietaryPreference || profile.dietaryPreference === "None") return null;
   const first = profile.dietaryPreference.split(",")[0]?.trim();
   if (!first || first === "None") return null;
-  if (dietaryStyles.includes(first)) return first;
+  if (isDietStyleOption(first)) return first;
   return null;
 }
 
 export function OnboardingModal({ initialProfile, onComplete }: Props) {
+  const { user } = useAuth();
   const baseDefaults = useMemo(
     () => ({ ...defaultUserProfile(), ...initialProfile }),
     [initialProfile]
@@ -315,6 +320,11 @@ export function OnboardingModal({ initialProfile, onComplete }: Props) {
       window.localStorage.setItem(RECIPIFY_PROFILE_STORAGE_KEY, JSON.stringify(completed));
     } catch {
       // onComplete still updates app state
+    }
+    if (user?.id) {
+      void upsertProfileToSupabase(user.id, completed).then(({ error }) => {
+        if (error) console.warn("Profile sync after onboarding:", error);
+      });
     }
     onComplete(completed);
   };
@@ -582,35 +592,6 @@ export function OnboardingModal({ initialProfile, onComplete }: Props) {
                 </button>
               </div>
             </div>
-
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--white)] p-4 shadow-sm">
-              <p className="mb-3 text-xs font-medium uppercase tracking-[0.08em] text-[var(--gray)]">
-                Household
-              </p>
-              <label className="block text-xs text-[var(--gray)]">
-                People you usually cook for
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={8}
-                className="mt-1 w-full rounded-xl border border-[var(--border)] px-3 py-2 text-sm"
-                value={profile.householdSize ?? 1}
-                onChange={(e) => {
-                  const n = Math.min(8, Math.max(1, Number(e.target.value) || 1));
-                  update("householdSize", n);
-                }}
-              />
-              <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-[var(--green)]"
-                  checked={profile.kidFriendly ?? false}
-                  onChange={(e) => update("kidFriendly", e.target.checked)}
-                />
-                Prefer kid-friendly, simple recipes when possible
-              </label>
-            </div>
           </div>
         ) : null}
 
@@ -665,6 +646,7 @@ export function OnboardingModal({ initialProfile, onComplete }: Props) {
                 Select any ingredients you&apos;re allergic or sensitive to. We&apos;ll hide
                 recipes containing them and warn you on all dishes.
               </p>
+              <AllergySafetyNotice />
               <div className="flex flex-wrap gap-2">
                 {allergies.map((a) => (
                   <button

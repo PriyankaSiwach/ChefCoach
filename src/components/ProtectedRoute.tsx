@@ -6,7 +6,16 @@ export function ProtectedRoute() {
   const location = useLocation();
 
   if (initializing) {
-    return <div className="min-h-screen bg-[var(--cream)]" aria-busy />;
+    return (
+      <div
+        className="flex min-h-screen flex-col items-center justify-center bg-[var(--cream)] text-sm text-[var(--gray)]"
+        aria-busy
+        aria-label="Loading"
+      >
+        <span className="app-loading-spinner mb-3" aria-hidden />
+        Loading…
+      </div>
+    );
   }
 
   if (!session) {

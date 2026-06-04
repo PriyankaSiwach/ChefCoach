@@ -6,40 +6,78 @@ import dotenv from "dotenv";
 dotenv.config({ path: path.resolve(__dirname, ".env.local") });
 dotenv.config({ path: path.resolve(__dirname, ".env") });
 
-/** Dev-only: serve POST /api/cook-recipes from Vite (shared OpenAI logic). */
-function cookRecipesDevPlugin(): Plugin {
+/** Dev-only: serve POST /api/* routes from Vite when the Express API is not running. */
+function devApiPlugin(): Plugin {
   return {
-    name: "cook-recipes-dev-api",
+    name: "dev-api-routes",
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         const pathname = (req.url ?? "").split("?")[0];
-        if (req.method !== "POST" || pathname !== "/api/cook-recipes") {
+        if (req.method !== "POST") {
           next();
           return;
         }
 
-        try {
+        const readJsonBody = async (): Promise<Record<string, unknown>> => {
           const chunks: Buffer[] = [];
           for await (const chunk of req as AsyncIterable<Buffer>) {
             chunks.push(chunk);
           }
           const rawBody = Buffer.concat(chunks).toString("utf8");
-          let body: Record<string, unknown> = {};
           try {
-            body = rawBody ? (JSON.parse(rawBody) as Record<string, unknown>) : {};
+            return rawBody ? (JSON.parse(rawBody) as Record<string, unknown>) : {};
           } catch {
             res.statusCode = 400;
             res.setHeader("Content-Type", "application/json");
             res.end(JSON.stringify({ error: "Invalid JSON body." }));
-            return;
+            throw new Error("invalid_json");
           }
+        };
 
+        if (pathname === "/api/auth/email-exists") {
+          try {
+            const body = await readJsonBody();
+            const { checkEmailExistsInSupabase } = await import("./server/auth-email-exists.mjs");
+            const email = typeof body.email === "string" ? body.email : "";
+            const result = await checkEmailExistsInSupabase(email);
+            if (!result.configured) {
+              res.statusCode = 503;
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ error: "not_configured" }));
+              return;
+            }
+            if (result.error) {
+              res.statusCode = 502;
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ error: result.error }));
+              return;
+            }
+            res.statusCode = 200;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ exists: Boolean(result.exists) }));
+          } catch (e) {
+            if ((e as Error).message === "invalid_json") return;
+            res.statusCode = 502;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ error: "Email lookup failed." }));
+          }
+          return;
+        }
+
+        if (pathname !== "/api/cook-recipes") {
+          next();
+          return;
+        }
+
+        try {
+          const body = await readJsonBody();
           const { runCookRecipes } = await import("./server/cook-recipes-logic.mjs");
           const out = await runCookRecipes(body);
           res.statusCode = 200;
           res.setHeader("Content-Type", "application/json");
           res.end(JSON.stringify(out));
         } catch (e: unknown) {
+          if ((e as Error).message === "invalid_json") return;
           const err = e as { statusCode?: number; message?: string };
           const code = typeof err.statusCode === "number" ? err.statusCode : 502;
           res.statusCode = code;
@@ -54,13 +92,31 @@ function cookRecipesDevPlugin(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [cookRecipesDevPlugin(), react()],
+  plugins: [devApiPlugin(), react()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  // Capacitor plugins call registerPlugin() at import time using browser APIs.
+  // Pre-bundling them with esbuild (which runs in Node) can silently break them.
+  // Exclude all @capacitor/* and @revenuecat/* packages so Vite serves them
+  // directly as ESM without any transformation.
+  optimizeDeps: {
+    exclude: [
+      "@capacitor/core",
+      "@revenuecat/purchases-capacitor",
+      "@revenuecat/purchases-capacitor-ui",
+      "@revenuecat/purchases-typescript-internal-esm",
+    ],
+  },
   server: {
     port: 5173,
+    proxy: {
+      "/api/auth": {
+        target: `http://127.0.0.1:${Number(process.env.API_PORT) || 3001}`,
+        changeOrigin: true,
+      },
+    },
   },
 });

@@ -1,5 +1,6 @@
 import type { DietFilter, RecipeResultItem, TimeFilter, UserGoal, UserProfile } from "@/types";
 import { apiUrl } from "@/lib/apiBase";
+import { buildUserDietaryRestrictionsPrompt } from "@/lib/dietConstants";
 
 type CookRecipeRaw = {
   title?: unknown;
@@ -107,78 +108,34 @@ export type FetchCookRecipesParams = {
   profile: UserProfile | null;
 };
 
+/**
+ * @deprecated Cook tab uses `matchRecipesFromIngredients` (hardcoded library).
+ * This API route calls OpenAI for recipe text — kept for optional server use only.
+ */
 export async function fetchCookRecipesFromApi(
   params: FetchCookRecipesParams
 ): Promise<RecipeResultItem[]> {
   const { ingredients, dietaryPreference, maxCookTime, profile } = params;
   const goal = (profile?.goal ?? "maintain_weight") as UserGoal;
   const allergies = (profile?.allergies ?? []).filter((a) => a !== "None");
+  const dislikedFoods = (profile?.dislikedFoods ?? []).filter(Boolean);
+  const dietaryRestrictionsPrompt = buildUserDietaryRestrictionsPrompt(profile);
 
-  const url = apiUrl("/api/cook-recipes");
-  // #region agent log
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ingredients,
-        dietaryPreference,
-        maxCookTime,
-        goal,
-        allergies,
-      }),
-    });
-  } catch (e) {
-    fetch("http://127.0.0.1:7756/ingest/5bcd1af0-f38e-4c9e-b654-37b6c6ba0406", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "a37dbd" },
-      body: JSON.stringify({
-        sessionId: "a37dbd",
-        runId: "pre-fix",
-        hypothesisId: "H1",
-        location: "cook-recipes-api.ts:fetch",
-        message: "fetch threw (network/CORS/API down?)",
-        data: {
-          url,
-          err: e instanceof Error ? e.message : String(e),
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    throw e;
-  }
-  const rawText = await res.text();
-  let data = {} as CookRecipesResponse;
-  let jsonOk = false;
-  try {
-    data = JSON.parse(rawText) as CookRecipesResponse;
-    jsonOk = true;
-  } catch {
-    /* leave data {} */
-  }
-  fetch("http://127.0.0.1:7756/ingest/5bcd1af0-f38e-4c9e-b654-37b6c6ba0406", {
+  const res = await fetch(apiUrl("/api/cook-recipes"), {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "a37dbd" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      sessionId: "a37dbd",
-      runId: "pre-fix",
-      hypothesisId: "H2",
-      location: "cook-recipes-api.ts:response",
-      message: "cook-recipes HTTP response",
-      data: {
-        url,
-        status: res.status,
-        ok: res.ok,
-        jsonOk,
-        bodyPrefix: rawText.slice(0, 160),
-        serverError: typeof data.error === "string" ? data.error : null,
-        recipesLen: Array.isArray(data.recipes) ? data.recipes.length : -1,
-      },
-      timestamp: Date.now(),
+      ingredients,
+      dietaryPreference,
+      maxCookTime,
+      goal,
+      allergies,
+      dislikedFoods,
+      dietaryRestrictionsPrompt,
     }),
-  }).catch(() => {});
-  // #endregion
+  });
+
+  const data = (await res.json()) as CookRecipesResponse;
 
   if (!res.ok) {
     throw new Error(data.error || "Could not generate recipes. Try again.");

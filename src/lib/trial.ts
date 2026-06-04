@@ -42,17 +42,6 @@ export function getStoredEmail(): string | null {
   }
 }
 
-export function saveEmailGateSubmission(email: string): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(KEY_EMAIL, email.trim());
-    window.localStorage.setItem(KEY_SCANS, "3");
-    window.localStorage.setItem(KEY_STARTED, new Date().toISOString());
-    window.localStorage.removeItem(KEY_ENDED);
-  } catch {
-    /* ignore */
-  }
-}
 
 export function getTrialScansRemaining(): number {
   if (typeof window === "undefined") return 3;

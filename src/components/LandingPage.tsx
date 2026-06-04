@@ -1,4 +1,6 @@
 
+import { APP_NAME } from "@/lib/brand";
+
 type Props = {
   onTryForFree: () => void;
 };
@@ -8,7 +10,7 @@ export function LandingPage({ onTryForFree }: Props) {
     <main className="min-h-screen bg-[var(--cream)] px-6 py-10">
       <section className="mx-auto flex min-h-[80vh] w-full max-w-[940px] flex-col justify-center rounded-3xl bg-gradient-to-br from-[var(--green)] to-[var(--green-light)] p-8 text-[var(--cream)] shadow-xl md:p-12">
         <p className="text-xs uppercase tracking-[0.2em] text-[var(--cream)]/80">
-          Recipify
+          {APP_NAME}
         </p>
         <h1 className="mt-4 font-playfair text-5xl leading-tight md:text-6xl">
           Your personal nutrition coach.

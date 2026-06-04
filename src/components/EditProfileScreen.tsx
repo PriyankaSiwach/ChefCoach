@@ -8,7 +8,9 @@ import {
   PROFILE_CUISINE_OPTIONS,
   RECIPIFY_PROFILE_STORAGE_KEY,
 } from "@/lib/profileStorage";
+import { ALLERGY_OPTIONS, DIETARY_STYLE_OPTIONS, isDietStyleOption } from "@/lib/dietConstants";
 import { useToast } from "./Toast";
+import { AllergySafetyNotice } from "@/components/AllergySafetyNotice";
 
 type Props = {
   profile: UserProfile;
@@ -18,8 +20,8 @@ type Props = {
 
 type Motivation = "fun" | "just_cooking" | "health" | "family";
 
-const allergies = ["Nuts", "Dairy", "Eggs", "Shellfish", "Soy", "Gluten", "None"];
-const dietaryStyles = ["Vegetarian", "Vegan", "Keto", "Gluten-free"];
+const allergies = [...ALLERGY_OPTIONS];
+const dietaryStyles = [...DIETARY_STYLE_OPTIONS];
 
 const COOKING_SKILL_OPTIONS: { id: CookingSkill; label: string }[] = [
   { id: "beginner", label: "Beginner" },
@@ -43,7 +45,7 @@ function initialDietStyleKey(profile: UserProfile): string | null {
   if (!profile.dietaryPreference || profile.dietaryPreference === "None") return null;
   const first = profile.dietaryPreference.split(",")[0]?.trim();
   if (!first) return null;
-  return dietaryStyles.includes(first) ? first : null;
+  return isDietStyleOption(first) ? first : null;
 }
 
 export function EditProfileScreen({ profile, onSave, onClose }: Props) {
@@ -642,6 +644,7 @@ export function EditProfileScreen({ profile, onSave, onClose }: Props) {
                   Select any ingredients you&apos;re allergic or sensitive to. We&apos;ll hide
                   recipes containing them and warn you on all dishes.
                 </p>
+                <AllergySafetyNotice />
                 <div className="flex flex-wrap gap-2">
                   {allergies.map((a) => (
                     <button
