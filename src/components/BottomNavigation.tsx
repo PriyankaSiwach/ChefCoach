@@ -70,7 +70,7 @@ export function BottomNavigation({
   };
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-[var(--border)] bg-[var(--white)] pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-0.5 md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-[58] border-t border-[var(--border)] bg-[var(--white)] pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-0.5 md:hidden">
       <div className="relative mx-auto flex max-w-[600px]">
         <span
           className="pointer-events-none absolute bottom-0 h-[3px] rounded-full bg-[#2D5016]"

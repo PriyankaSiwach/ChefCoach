@@ -410,27 +410,27 @@ export function LoginPage() {
           </button>
         </div>
 
-        {/* Social sign-in — Apple must be at least as prominent as Google (Apple guideline 4.8) */}
-        <div className="mt-5 flex gap-3">
+        {/* Social sign-in — Apple first and full-width (Apple guideline 4.8) */}
+        <div className="mt-5 flex flex-col gap-3">
           <button
             type="button"
             aria-label="Sign in with Apple"
             disabled={appleLoading || googleLoading}
             onClick={() => void signInWithOAuth("apple")}
-            className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-black py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-neutral-900 disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-black py-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-neutral-900 disabled:opacity-50"
           >
             <AppleLogo />
-            {appleLoading ? "…" : "Apple"}
+            {appleLoading ? "Signing in…" : "Continue with Apple"}
           </button>
           <button
             type="button"
             aria-label="Sign in with Google"
             disabled={appleLoading || googleLoading}
             onClick={() => void signInWithOAuth("google")}
-            className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--white)] py-3 text-sm font-semibold text-[var(--text)] shadow-sm transition hover:bg-[var(--gray-light)] disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--white)] py-3.5 text-sm font-semibold text-[var(--text)] shadow-sm transition hover:bg-[var(--gray-light)] disabled:opacity-50"
           >
             <GoogleLogo />
-            {googleLoading ? "…" : "Google"}
+            {googleLoading ? "Signing in…" : "Continue with Google"}
           </button>
         </div>
 

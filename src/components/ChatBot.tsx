@@ -17,7 +17,7 @@ function callDietCoach(_history: ChatMessage[], userText: string): Promise<strin
   return Promise.resolve(replyOfflineDietCoach(userText));
 }
 
-export function ChatBot() {
+export function ChatBot({ hidden = false }: { hidden?: boolean }) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -210,6 +210,7 @@ export function ChatBot() {
         </>
       ) : null}
 
+      {!hidden ? (
       <div className="fixed bottom-[calc(80px+env(safe-area-inset-bottom,0px))] right-[max(1.5rem,env(safe-area-inset-right))] z-[55] md:bottom-6">
         {showFabTooltip && !open ? (
           <div
@@ -243,6 +244,7 @@ export function ChatBot() {
           </span>
         </button>
       </div>
+      ) : null}
     </>
   );
 }

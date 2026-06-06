@@ -798,7 +798,7 @@ export function PlanTab({
       {/* ── This Week ── */}
       {subTab === "week" ? (
         <section className="mx-auto max-w-[920px] px-5 pt-6">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 sm:items-start">
             {mealPlan.days.map((d, i) => {
               const expanded = expandedDays.has(d.dateStr);
               const isToday = d.dateStr === todayYmd;
@@ -847,9 +847,10 @@ export function PlanTab({
                             </span>
 
                             {/* Input row */}
-                            <div className="mt-1 flex items-center gap-2">
+                            <div className="mt-1 flex flex-wrap items-center gap-2">
                               <input
                                 className="min-w-0 flex-1 rounded-xl border border-[var(--border)] py-2 pl-3 pr-3 text-sm"
+                                style={{ minWidth: "0", width: "100%" }}
                                 value={slotValue}
                                 onChange={(e) => onSlotChange(d.dateStr, slot, e.target.value)}
                                 onClick={(e) => e.stopPropagation()}
@@ -861,7 +862,7 @@ export function PlanTab({
                                   e.stopPropagation();
                                   runLocalSuggest(d.dateStr, slot);
                                 }}
-                                className="shrink-0 whitespace-nowrap rounded-full border border-[var(--green)] bg-[var(--green-pale)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--green)]"
+                                className="w-full rounded-full border border-[var(--green)] bg-[var(--green-pale)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--green)] sm:w-auto sm:whitespace-nowrap"
                               >
                                 ✨ Suggest
                               </button>

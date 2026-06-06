@@ -14,10 +14,8 @@ type Props = {
 
 export function CookTimeFilterSection({ selectedTime, onTimeChange }: Props) {
   return (
-    <section className="mx-auto max-w-[600px] px-5 pb-4">
-      <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--gray)]">
-        Max cook time
-      </h3>
+    <section className="mx-auto max-w-[430px] px-4 pb-4">
+      <h3 className="mb-2.5 text-[13px] font-semibold text-[var(--text)]">Max cook time</h3>
       <div className="no-scrollbar flex flex-nowrap gap-2 overflow-x-auto pb-2">
         {times.map((t) => (
           <button

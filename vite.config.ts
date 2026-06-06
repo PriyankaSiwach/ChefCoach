@@ -105,6 +105,8 @@ export default defineConfig({
   optimizeDeps: {
     exclude: [
       "@capacitor/core",
+      "@capacitor/camera",
+      "@capacitor/local-notifications",
       "@revenuecat/purchases-capacitor",
       "@revenuecat/purchases-capacitor-ui",
       "@revenuecat/purchases-typescript-internal-esm",

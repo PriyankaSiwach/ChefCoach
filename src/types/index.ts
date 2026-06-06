@@ -73,6 +73,14 @@ export interface UserProfile {
   cuisinePreferences?: string[];
   /** Optional; empty means no extra prioritisation. */
   healthFocuses?: HealthFocusId[];
+
+  // ── Subscription fields (stored inside profile_data in Supabase) ──────────
+  /** True when user has an active Pro subscription. */
+  isPro?: boolean;
+  /** Number of lifetime fridge scans used by this user. */
+  freeScansUsed?: number;
+  /** ISO-8601 expiry timestamp for the Pro subscription, or null. */
+  subscriptionExpiresAt?: string | null;
 }
 
 export type DietFilter =

@@ -1,6 +1,7 @@
 
 import { useState } from "react";
-import { presentRevenueCatPaywall } from "@/lib/revenueCat";
+import { presentRevenueCatPaywall, restorePurchases } from "@/lib/revenueCat";
+import { useToast } from "@/components/Toast";
 
 type Props = {
   open: boolean;
@@ -11,6 +12,25 @@ type Props = {
 
 export function UpgradeModal({ open, onClose, appUserId }: Props) {
   const [loading, setLoading] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const showToast = useToast();
+
+  const handleRestore = async () => {
+    setRestoring(true);
+    try {
+      const result = await restorePurchases(appUserId);
+      if (result.ok) {
+        showToast("✅ Purchases restored! You now have Pro access.", "success");
+        onClose();
+      } else {
+        showToast(result.error, "info");
+      }
+    } catch {
+      showToast("Restore failed. Please try again.", "info");
+    } finally {
+      setRestoring(false);
+    }
+  };
 
   const handleUpgrade = async () => {
     try {
@@ -139,8 +159,16 @@ export function UpgradeModal({ open, onClose, appUserId }: Props) {
           </p>
           <button
             type="button"
+            onClick={() => void handleRestore()}
+            disabled={restoring || loading}
+            className="mt-3 w-full rounded-[14px] border border-[var(--border)] py-3 text-sm font-medium text-[var(--text)] transition hover:bg-[var(--gray-light)] disabled:opacity-60"
+          >
+            {restoring ? "Restoring…" : "Restore Purchases"}
+          </button>
+          <button
+            type="button"
             onClick={handleRemindTomorrow}
-            className="mt-3 w-full text-center text-[11px] text-[var(--gray)] underline underline-offset-2"
+            className="mt-2 w-full text-center text-[11px] text-[var(--gray)] underline underline-offset-2"
           >
             Remind me tomorrow
           </button>

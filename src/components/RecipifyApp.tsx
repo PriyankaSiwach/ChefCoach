@@ -1,5 +1,5 @@
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import type { DietFilter, Recipe, TimeFilter, UserProfile } from "@/types";
 import { useFavourites } from "@/hooks/useFavourites";
@@ -29,19 +29,25 @@ import {
 } from "@/lib/gamification";
 import type { RecipeResultItem } from "@/types";
 import { useToast } from "./Toast";
-import { TrialCookBanner } from "./TrialCookBanner";
+import { ScanCounter } from "./ScanCounter";
 import { useAuth } from "@/contexts/AuthContext";
-import { deleteRemoteProfile, upsertProfileToSupabase } from "@/lib/profileSupabase";
-import { UpgradeModal } from "./UpgradeModal";
 import {
-  consumeTrialScan,
-  getTrialEnded,
-  getTrialScansRemaining,
+  deleteRemoteProfile,
+  isProSubscriptionActive,
+  upsertProfileToSupabase,
+} from "@/lib/profileSupabase";
+import { verifySubscriptionOnLaunch } from "@/lib/iap";
+import { PaywallScreen } from "./PaywallScreen";
+import {
+  isTrialExhausted,
   isTrialScanBypassActive,
   migrateTrialState,
-  setTrialEnded as persistTrialEnded,
+  recordScanUsed,
 } from "@/lib/trial";
 import { RECIPIFY_PROFILE_STORAGE_KEY } from "@/lib/profileStorage";
+import { initReminderSync } from "@/lib/reminderNotifications";
+import { DashboardScreen } from "./DashboardScreen";
+import { DashboardEntryCard } from "./DashboardEntryCard";
 export function RecipifyApp() {
   const mockIngredients = [
     "eggs",
@@ -84,35 +90,144 @@ export function RecipifyApp() {
 
   const [gateChecked, setGateChecked] = useState(false);
   const { user, signOut } = useAuth();
-  const [trialEnded, setTrialEnded] = useState(false);
-  const [isPro, setIsPro] = useState(false);
+
+  // Pro status is derived from the profile object (profile_data JSON in Supabase).
+  // `isProSubscriptionActive` checks isPro flag AND subscription_expires_at.
   const trialBypass = useMemo(
     () => isTrialScanBypassActive(user?.email ?? undefined),
     [user?.email]
   );
-  const effectivePro = isPro || trialBypass;
-  const [graceAfterThirdScan, setGraceAfterThirdScan] = useState(false);
-  const [trialUiTick, setTrialUiTick] = useState(0);
-  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const effectivePro = isProSubscriptionActive(profile) || trialBypass;
+
+  /** Drives re-render of ScanCounter after each scan. */
+  const [scanCountTick, setScanCountTick] = useState(0);
+  /** True when the full-screen paywall is open (4th scan intercepted). */
+  const [paywallOpen, setPaywallOpen] = useState(false);
+  const [dashboardOpen, setDashboardOpen] = useState(false);
   const [profileMealNudge, setProfileMealNudge] = useState(false);
+
+  const suppressNextPopRef = useRef(false);
+  const dashboardHistoryPushedRef = useRef(false);
+  const profileTabHistoryPushedRef = useRef(false);
+  const dashboardOpenRef = useRef(false);
+  const activeTabRef = useRef(activeTab);
+
+  useEffect(() => {
+    dashboardOpenRef.current = dashboardOpen;
+  }, [dashboardOpen]);
+
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
+
+  /** Keep cook as the history anchor so iOS swipe-back does not leave the app shell. */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!window.history.state?.recipifyAppShell) {
+      window.history.replaceState(
+        { ...(window.history.state ?? {}), recipifyAppShell: true },
+        ""
+      );
+    }
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    try {
-      const pro = window.localStorage.getItem("recipify_is_pro") === "true";
-      setIsPro(pro);
-      migrateTrialState();
-      setTrialEnded(getTrialEnded());
-      const remindTomorrow = window.localStorage.getItem("recipify_remind_tomorrow");
-      const today = new Date().toISOString().slice(0, 10);
-      if (!pro && remindTomorrow === today) {
-        setUpgradeModalOpen(true);
+
+    const onPopState = () => {
+      if (suppressNextPopRef.current) {
+        suppressNextPopRef.current = false;
+        return;
       }
-    } catch {
-      /* ignore */
+
+      if (dashboardOpenRef.current) {
+        setDashboardOpen(false);
+        dashboardHistoryPushedRef.current = false;
+        return;
+      }
+
+      if (activeTabRef.current === "profile") {
+        profileTabHistoryPushedRef.current = false;
+        setActiveTab("cook");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+
+      if (activeTabRef.current === "cook") {
+        navigate("/", { replace: true });
+      }
+    };
+
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [navigate]);
+
+  const popHistoryEntry = useCallback(() => {
+    suppressNextPopRef.current = true;
+    window.history.back();
+  }, []);
+
+  const openDashboard = useCallback(() => {
+    setDashboardOpen(true);
+    window.history.pushState({ recipifyDashboard: true }, "");
+    dashboardHistoryPushedRef.current = true;
+  }, []);
+
+  const closeDashboard = useCallback(() => {
+    setDashboardOpen(false);
+    if (dashboardHistoryPushedRef.current) {
+      dashboardHistoryPushedRef.current = false;
+      popHistoryEntry();
     }
+  }, [popHistoryEntry]);
+
+  const handleTabChange = useCallback(
+    (tab: "cook" | "saved" | "plan" | "profile") => {
+      if (dashboardHistoryPushedRef.current) {
+        dashboardHistoryPushedRef.current = false;
+        setDashboardOpen(false);
+        popHistoryEntry();
+      } else {
+        setDashboardOpen(false);
+      }
+
+      if (
+        activeTabRef.current === "profile" &&
+        tab !== "profile" &&
+        profileTabHistoryPushedRef.current
+      ) {
+        profileTabHistoryPushedRef.current = false;
+        popHistoryEntry();
+      } else if (tab === "profile" && activeTabRef.current !== "profile") {
+        window.history.pushState({ recipifyProfileTab: true }, "");
+        profileTabHistoryPushedRef.current = true;
+      }
+
+      setActiveTab(tab);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    },
+    [popHistoryEntry]
+  );
+
+  // Boot: migrate legacy localStorage keys
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    migrateTrialState();
     setGateChecked(true);
   }, []);
+
+  // Meal / water / streak reminders (local notifications when enabled)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    return initReminderSync();
+  }, []);
+
+  // On login: verify subscription is still active against RevenueCat / local expiry
+  useEffect(() => {
+    if (!user?.id || !profileReady) return;
+    void verifySubscriptionOnLaunch(user.id, profile, setProfile);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, profileReady]); // run once per session when user+profile are ready
 
   useEffect(() => {
     if (!user?.id || !profileReady || profile === null) return;
@@ -135,23 +250,18 @@ export function RecipifyApp() {
     }
   }, [gateChecked, searchParams, setSearchParams, showToast]);
 
-  useEffect(() => {
-    if (typeof window === "undefined" || !gateChecked) return;
-    setTrialEnded(getTrialEnded());
-  }, [gateChecked, trialUiTick, user?.email]);
-
+  // When subscription changes from another tab/context, resync local profile.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const onSub = () => {
       try {
-        setIsPro(window.localStorage.getItem("recipify_is_pro") === "true");
-      } catch {
-        /* ignore */
-      }
+        const raw = window.localStorage.getItem(RECIPIFY_PROFILE_STORAGE_KEY);
+        if (raw) setProfile(JSON.parse(raw) as typeof profile);
+      } catch { /* ignore */ }
     };
     window.addEventListener("recipify-subscription-changed", onSub);
     return () => window.removeEventListener("recipify-subscription-changed", onSub);
-  }, []);
+  }, [setProfile]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -198,41 +308,34 @@ export function RecipifyApp() {
       return;
     }
 
+    // ── Paywall gate: intercept before the 4th scan attempt ──────────────────
+    if (!effectivePro && isTrialExhausted()) {
+      setPaywallOpen(true);
+      return;
+    }
+
     setError(null);
     setLoading(true);
     setMatchedRecipePool([]);
 
     try {
       const base64 = currentImage.split(",")[1] ?? "";
-      const mimeType =
-        currentImage.split(";")[0]?.split(":")[1] || "image/jpeg";
-      let detectedIngredients = await detectFridgeIngredients(
-        base64,
-        mimeType,
-        profile
-      );
-      if (!detectedIngredients.length) {
-        detectedIngredients = [...mockIngredients];
-      }
+      const mimeType = currentImage.split(";")[0]?.split(":")[1] || "image/jpeg";
+      let detectedIngredients = await detectFridgeIngredients(base64, mimeType, profile);
+      if (!detectedIngredients.length) detectedIngredients = [...mockIngredients];
       setIngredients(detectedIngredients);
 
-      // Only OpenAI call: ingredient vision. Recipes come from the hardcoded meal library.
+      // Only OpenAI call: ingredient vision. Recipes come from the hardcoded library.
       const matched = matchRecipesFromIngredients(detectedIngredients, profile);
       setMatchedRecipePool(matched);
 
+      // Consume one free scan (local + background Supabase sync)
       if (!effectivePro) {
-        const beforeRemaining = getTrialScansRemaining();
-        const afterRemaining = consumeTrialScan();
-        setTrialUiTick((t) => t + 1);
-        if (afterRemaining === 0 && beforeRemaining > 0 && !getTrialEnded()) {
-          setGraceAfterThirdScan(true);
-          setUpgradeModalOpen(true);
-          window.setTimeout(() => {
-            persistTrialEnded(true);
-            setTrialEnded(true);
-            setGraceAfterThirdScan(false);
-            setTrialUiTick((t) => t + 1);
-          }, 2000);
+        recordScanUsed(user?.id ?? null);
+        setScanCountTick((t) => t + 1);
+        // After the 3rd scan completes, proactively show paywall so user knows
+        if (isTrialExhausted()) {
+          setPaywallOpen(true);
         }
       }
     } catch (err) {
@@ -292,35 +395,49 @@ export function RecipifyApp() {
     );
   }
 
-  const recipesLocked =
-    !effectivePro && recipes.length > 0 && trialEnded && !graceAfterThirdScan;
-  const showTrialEndedBanner =
-    !effectivePro && recipes.length > 0 && trialEnded && !graceAfterThirdScan;
-  const openUpgrade = () => setUpgradeModalOpen(true);
+  const trialExhausted = !effectivePro && isTrialExhausted();
+  // Once all free scans are used, lock the displayed recipes (prompt upgrade)
+  const recipesLocked = trialExhausted && recipes.length > 0;
+  const showTrialEndedBanner = recipesLocked;
+  const openPaywall = () => setPaywallOpen(true);
+
+  const tabLabels = {
+    cook: "Cook",
+    saved: "Saved",
+    plan: "Plan",
+    profile: "Profile",
+  } as const;
 
   return (
     <>
       <Header
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={handleTabChange}
         favouritesCount={favourites.length}
         profileAvatarDataUri={profile?.avatarDataUri ?? undefined}
       />
 
-      {activeTab === "cook" && !effectivePro ? (
-        <TrialCookBanner
-          scansRemaining={getTrialScansRemaining()}
-          trialEnded={trialEnded}
-          onUpgrade={openUpgrade}
-        />
-      ) : null}
 
       {activeTab === "cook" ? (
         <main className="pb-[calc(5rem+env(safe-area-inset-bottom,0px))]">
           <div style={{ animation: "fadeInDown 0.4s ease both" }}>
             <HeroSection />
           </div>
-          <div style={{ animation: "fadeInUp 0.5s ease both", animationDelay: "0.1s" }}>
+
+          <div
+            className="relative z-20 mx-auto -mt-8 max-w-[430px] space-y-3 px-4"
+            style={{ animation: "fadeInUp 0.45s ease both", animationDelay: "0.05s" }}
+          >
+            {profile ? (
+              <DashboardEntryCard profile={profile} onOpen={openDashboard} />
+            ) : null}
+
+            {!effectivePro ? (
+              <ScanCounter tick={scanCountTick} onUpgrade={openPaywall} />
+            ) : null}
+          </div>
+
+          <div style={{ animation: "fadeInUp 0.5s ease both", animationDelay: "0.12s" }}>
             <CameraUploadSection
               currentImage={currentImage}
               onImageChange={onImageChange}
@@ -328,7 +445,7 @@ export function RecipifyApp() {
             />
           </div>
 
-          <div style={{ animation: "fadeInUp 0.5s ease both", animationDelay: "0.2s" }}>
+          <div style={{ animation: "fadeInUp 0.5s ease both", animationDelay: "0.18s" }}>
             <DietaryPreferencesSection
               selectedDiet={selectedDiet}
               onDietChange={setSelectedDiet}
@@ -339,7 +456,7 @@ export function RecipifyApp() {
             />
           </div>
 
-          <div style={{ animation: "fadeInUp 0.5s ease both", animationDelay: "0.3s" }}>
+          <div style={{ animation: "fadeInUp 0.5s ease both", animationDelay: "0.24s" }}>
             <RecipeResultsSection
               error={error}
               loading={loading}
@@ -369,7 +486,7 @@ export function RecipifyApp() {
               }}
               showTrialEndedBanner={showTrialEndedBanner}
               recipesLocked={recipesLocked}
-              onUpgrade={openUpgrade}
+              onUpgrade={openPaywall}
             />
           </div>
         </main>
@@ -413,14 +530,13 @@ export function RecipifyApp() {
         profile ? (
           <ProfileTab
             profile={profile}
+            userEmail={user?.email ?? null}
+            isPro={effectivePro}
             onEditProfile={() => {
               setEditProfileKey((k) => k + 1);
               setShowEditProfile(true);
             }}
-            onGoToCook={() => {
-              setActiveTab("cook");
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
+            onOpenPaywall={openPaywall}
             onLogout={() => void handleLogout()}
             onDeleteRemoteProfile={
               user?.id ? async () => deleteRemoteProfile(user.id) : undefined
@@ -450,7 +566,7 @@ export function RecipifyApp() {
       </footer>
       <BottomNavigation
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={handleTabChange}
         showProfileMealNudge={profileMealNudge}
         profileAvatarDataUri={profile?.avatarDataUri ?? undefined}
       />
@@ -458,11 +574,26 @@ export function RecipifyApp() {
         achievement={celebrationQueue[0] ?? null}
         onDismiss={() => setCelebrationQueue((q) => q.slice(1))}
       />
-      <ChatBot />
-      <UpgradeModal
-        open={upgradeModalOpen}
-        onClose={() => setUpgradeModalOpen(false)}
+      <ChatBot hidden={activeTab === "profile" || dashboardOpen} />
+      {profile ? (
+        <DashboardScreen
+          open={dashboardOpen}
+          profile={profile}
+          backLabel={tabLabels[activeTab]}
+          onClose={closeDashboard}
+          onGoCook={() => {
+            closeDashboard();
+            handleTabChange("cook");
+          }}
+        />
+      ) : null}
+      <PaywallScreen
+        open={paywallOpen}
+        onClose={() => setPaywallOpen(false)}
+        onPurchaseSuccess={() => setPaywallOpen(false)}
         appUserId={user?.id ?? null}
+        currentProfile={profile}
+        setProfile={setProfile}
       />
       {showEditProfile && profile ? (
         <EditProfileScreen

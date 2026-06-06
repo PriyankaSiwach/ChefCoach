@@ -1,0 +1,38 @@
+AGE RATING QUESTIONNAIRE — ChefCoach
+App Store Connect → My Apps → ChefCoach → App Information → Age Rating
+
+All answers below are "None" / "No" unless stated.
+
+VIOLENCE
+  ─ Cartoon or Fantasy Violence ............... None
+  ─ Realistic Violence ........................ None
+  ─ Prolonged Graphic Violence ................ None
+  ─ Graphic Sexual Violence and Gore .......... None
+  ─ Profanity or Crude Humor .................. None
+
+MATURE / ADULT CONTENT
+  ─ Mature/Suggestive Themes .................. None
+  ─ Sexual Content or Nudity .................. None
+  ─ Simulated Gambling ........................ None
+  ─ Alcohol, Tobacco, or Drug Use ............. None
+  ─ Horror/Fear Themes ........................ None
+
+USER-GENERATED CONTENT
+  ─ User Generated Content .................... No
+    (Users save private recipes & profile data. Nothing is publicly posted,
+     shared, or discoverable by other users.)
+  ─ Unrestricted Web Access ................... No
+
+RECOMMENDED FINAL RATING → 4+ (suitable for all ages)
+
+NOTES FOR REVIEWER
+  • The app uses the device camera solely to photograph food / fridge contents
+    (NSCameraUsageDescription declared in Info.plist).
+  • The app accesses the photo library solely to select food images
+    (NSPhotoLibraryUsageDescription declared in Info.plist).
+  • Subscription is managed via Apple In-App Purchase / RevenueCat.
+    A "Restore Purchases" button is present on the paywall.
+  • Sign In with Apple is offered and displayed as the primary (first, full-width)
+    social login option above Google Sign-In, per Apple guideline 4.8.
+  • No third-party analytics SDKs are bundled that collect device identifiers.
+  • The app does not display advertising.

@@ -13,6 +13,7 @@ import { ALLERGY_OPTIONS, DIETARY_STYLE_OPTIONS, isDietStyleOption } from "@/lib
 import { upsertProfileToSupabase } from "@/lib/profileSupabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { AllergySafetyNotice } from "@/components/AllergySafetyNotice";
+import { UnitToggleInput } from "@/components/UnitToggleInput";
 
 type Props = {
   initialProfile?: UserProfile | null;
@@ -191,7 +192,7 @@ export function OnboardingModal({ initialProfile, onComplete }: Props) {
     } else {
       const w = Number(step1Weight);
       if (!Number.isFinite(w) || w < 20 || w > 300) {
-        next.weightKg = "Weight must be between 20 and 300 kg.";
+        next.weightKg = "Please enter a valid weight (20–300 kg / 44–660 lb).";
       }
     }
     if (!step1Height.trim()) {
@@ -199,7 +200,7 @@ export function OnboardingModal({ initialProfile, onComplete }: Props) {
     } else {
       const h = Number(step1Height);
       if (!Number.isFinite(h) || h < 50 || h > 250) {
-        next.heightCm = "Height must be between 50 and 250 cm.";
+        next.heightCm = "Please enter a valid height (50–250 cm / 20–98 in).";
       }
     }
     setStep1Errors(next);
@@ -434,47 +435,27 @@ export function OnboardingModal({ initialProfile, onComplete }: Props) {
                 ))}
               </div>
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-[var(--gray)]">
-                Weight (kg)
-              </label>
-              <input
-                aria-label="Weight in kilograms"
-                className="w-full rounded-xl border border-[var(--border)] px-3 py-2 text-sm"
-                type="number"
-                placeholder="70"
-                value={step1Weight}
-                onChange={(e) => {
-                  setStep1Weight(e.target.value);
-                  setStep1Errors((er) => ({ ...er, weightKg: undefined }));
-                }}
-              />
-              {step1Errors.weightKg ? (
-                <p className="mt-1 text-xs text-red-600">{step1Errors.weightKg}</p>
-              ) : null}
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-[var(--gray)]">
-                Height (cm)
-              </label>
-              <input
-                aria-label="Height in centimeters"
-                className="w-full rounded-xl border border-[var(--border)] px-3 py-2 text-sm"
-                type="number"
-                placeholder="170"
-                value={step1Height}
-                onChange={(e) => {
-                  setStep1Height(e.target.value);
-                  setStep1Errors((er) => ({ ...er, heightCm: undefined }));
-                }}
-              />
-              {step1Errors.heightCm ? (
-                <p className="mt-1 text-xs text-red-600">{step1Errors.heightCm}</p>
-              ) : null}
-              <p className="mt-2 text-[11px] leading-relaxed text-[var(--gray)]">
-                Used only to calculate your daily calorie target. Never shared.
-              </p>
-            </div>
+            <UnitToggleInput
+              type="weight"
+              valueInBase={step1Weight}
+              onChange={(v) => {
+                setStep1Weight(v);
+                setStep1Errors((er) => ({ ...er, weightKg: undefined }));
+              }}
+              error={step1Errors.weightKg}
+            />
+            <UnitToggleInput
+              type="height"
+              valueInBase={step1Height}
+              onChange={(v) => {
+                setStep1Height(v);
+                setStep1Errors((er) => ({ ...er, heightCm: undefined }));
+              }}
+              error={step1Errors.heightCm}
+            />
+            <p className="text-[11px] leading-relaxed text-[var(--gray)]">
+              Used only to calculate your daily calorie target. Never shared.
+            </p>
           </div>
         ) : null}
 

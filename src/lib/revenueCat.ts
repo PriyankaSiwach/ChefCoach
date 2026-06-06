@@ -1,8 +1,9 @@
 import { Capacitor } from "@capacitor/core";
 import type { CustomerInfo } from "@revenuecat/purchases-capacitor";
 
-const ENTITLEMENT_ID =
-  (import.meta.env.VITE_REVENUECAT_ENTITLEMENT_ID as string | undefined)?.trim() || "pro";
+// Public iOS API key — safe to embed in the client bundle (RevenueCat design).
+const RC_IOS_API_KEY = "appl_zWISHeIgOcePXOIWgZObpgvCzdY";
+const ENTITLEMENT_ID = "pro";
 
 type PurchasesModule = typeof import("@revenuecat/purchases-capacitor");
 type RevenueCatUIModule = typeof import("@revenuecat/purchases-capacitor-ui");
@@ -51,12 +52,12 @@ async function getRevenueCatUI(): Promise<RevenueCatUIModule | null> {
 function apiKeyForPlatform(): string | null {
   const p = Capacitor.getPlatform();
   if (p === "ios") {
-    const k = (import.meta.env.VITE_REVENUECAT_IOS_API_KEY as string | undefined)?.trim();
-    return k || null;
+    // Env var overrides the hardcoded key (useful for switching environments)
+    return (import.meta.env.VITE_REVENUECAT_IOS_API_KEY as string | undefined)?.trim()
+      || RC_IOS_API_KEY;
   }
   if (p === "android") {
-    const k = (import.meta.env.VITE_REVENUECAT_ANDROID_API_KEY as string | undefined)?.trim();
-    return k || null;
+    return (import.meta.env.VITE_REVENUECAT_ANDROID_API_KEY as string | undefined)?.trim() || null;
   }
   return null;
 }
@@ -166,6 +167,30 @@ export async function revenueCatLogOut(): Promise<void> {
 export type PurchaseProResult =
   | { ok: true }
   | { ok: false; error: string; userCancelled?: boolean };
+
+/** Restore previous purchases (required by App Store guidelines). */
+export async function restorePurchases(appUserId: string | null): Promise<PurchaseProResult> {
+  if (!isRevenueCatPurchasePlatform()) {
+    return { ok: false, error: "Restore is only available in the iOS app." };
+  }
+  try {
+    await ensurePurchasesReady(appUserId);
+    const mod = await getPurchases();
+    if (!mod) return { ok: false, error: "Purchase SDK unavailable." };
+    const { customerInfo } = await mod.Purchases.restorePurchases();
+    applyProFromCustomerInfo(customerInfo);
+    if (entitlementActive(customerInfo)) {
+      return { ok: true };
+    }
+    return {
+      ok: false,
+      error: "No active subscription found to restore. If you subscribed, make sure you're signed in with the same Apple ID.",
+    };
+  } catch (e: unknown) {
+    const err = e as { message?: string };
+    return { ok: false, error: err.message || "Restore failed. Please try again." };
+  }
+}
 
 export async function presentRevenueCatPaywall(appUserId: string | null): Promise<PurchaseProResult> {
   if (!isRevenueCatPurchasePlatform()) {

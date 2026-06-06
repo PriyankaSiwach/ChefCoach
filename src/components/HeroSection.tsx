@@ -45,7 +45,7 @@ export function HeroSection() {
   }, []);
 
   return (
-    <section className="relative min-h-[280px] overflow-hidden bg-gradient-to-br from-[var(--green)] via-[var(--green)] to-[var(--green-light)] px-5 py-10 text-center text-[var(--cream)] md:py-14">
+    <section className="relative min-h-[248px] overflow-hidden rounded-b-[28px] bg-gradient-to-br from-[var(--green)] via-[#356a1c] to-[var(--green-light)] px-5 pb-12 pt-9 text-center text-[var(--cream)] md:min-h-[260px] md:pb-14 md:pt-11">
       {/* Subtle radial highlight — lighter center */}
       <div
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_75%_65%_at_50%_38%,rgba(255,255,255,0.14)_0%,transparent_58%)]"
@@ -71,28 +71,23 @@ export function HeroSection() {
       </div>
 
       <div className="relative z-10 mx-auto flex max-w-2xl flex-col items-center">
-        <span className="mb-4 inline-flex rounded-full bg-white/25 px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--cream)] backdrop-blur-sm">
-          ✨ Smart macro tracking
+        <span className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/90 backdrop-blur-sm">
+          <span className="h-1.5 w-1.5 rounded-full bg-[var(--orange)]" aria-hidden />
+          AI nutrition coach
         </span>
 
-        <h1 className="font-playfair text-[clamp(34px,9vw,56px)] leading-tight">
+        <h1 className="font-playfair text-[clamp(32px,8.5vw,52px)] leading-[1.08] tracking-[-0.01em]">
           What&apos;s in your fridge?
         </h1>
 
-        <div className="relative mt-3 h-[1.75em] w-full max-w-lg">
+        <div className="relative mx-auto mt-3 h-[1.6em] w-full max-w-md">
           <p
             key={ROTATING_LINES[lineIndex]}
-            className="absolute inset-x-0 top-0 text-base font-medium leading-relaxed text-[var(--cream)]/95 transition-opacity duration-300 ease-in-out md:text-lg"
+            className="absolute inset-x-0 top-0 text-[15px] font-normal leading-relaxed text-white/85 transition-opacity duration-300 ease-in-out md:text-base"
             style={{ opacity: visible ? 1 : 0 }}
           >
             {ROTATING_LINES[lineIndex]}
           </p>
-        </div>
-
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-          <span className="rounded-full bg-white/20 px-4 py-2 text-sm font-medium backdrop-blur">
-            ✨ Fresh ideas every scan
-          </span>
         </div>
       </div>
     </section>

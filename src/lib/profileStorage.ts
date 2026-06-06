@@ -232,5 +232,25 @@ export function normalizeUserProfile(raw: unknown): UserProfile | null {
     cookingSkill,
     cuisinePreferences: cuisines.length > 0 ? cuisines : cuisinePreferences,
     healthFocuses: coerceHealthFocuses(r.healthFocuses),
+
+    // Subscription fields — stored in profile_data, passed through as-is
+    isPro: typeof r.isPro === "boolean" ? r.isPro : undefined,
+    freeScansUsed:
+      typeof r.freeScansUsed === "number" && Number.isFinite(r.freeScansUsed)
+        ? Math.max(0, Math.floor(r.freeScansUsed))
+        : undefined,
+    subscriptionExpiresAt:
+      typeof r.subscriptionExpiresAt === "string"
+        ? r.subscriptionExpiresAt
+        : r.subscriptionExpiresAt === null
+          ? null
+          : undefined,
   };
+}
+
+/** Return true if the profile's subscriptionExpiresAt is in the future (or null = forever). */
+export function isProSubscriptionActive(profile: { isPro?: boolean; subscriptionExpiresAt?: string | null } | null | undefined): boolean {
+  if (!profile?.isPro) return false;
+  if (!profile.subscriptionExpiresAt) return true; // no expiry = lifetime
+  return new Date(profile.subscriptionExpiresAt) > new Date();
 }
