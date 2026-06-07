@@ -5,7 +5,8 @@ import type { DietFilter, Recipe, TimeFilter, UserProfile } from "@/types";
 import { useFavourites } from "@/hooks/useFavourites";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { detectFridgeIngredients } from "@/lib/openai";
-import { filterRecipeResults, matchRecipesFromIngredients } from "@/lib/fridge-recipe-match";
+import { filterRecipeResults } from "@/lib/fridge-recipe-match";
+import { fetchCookRecipesFromApi } from "@/lib/cook-recipes-api";
 import { BottomNavigation } from "./BottomNavigation";
 import { CameraUploadSection } from "./CameraUploadSection";
 import { CookTimeFilterSection } from "./CookTimeFilterSection";
@@ -19,7 +20,6 @@ import { ProfileTab } from "./ProfileTab";
 import { RecipeResultsSection } from "./RecipeResultsSection";
 import { SavedRecipesSection } from "./SavedRecipesSection";
 import { AchievementCelebration } from "./AchievementCelebration";
-import { ChatBot } from "./ChatBot";
 import type { AchievementUnlock } from "@/lib/gamification";
 import {
   appendRecipeToDailyLog,
@@ -33,6 +33,7 @@ import { ScanCounter } from "./ScanCounter";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   deleteRemoteProfile,
+  ensureProBypassForUser,
   isProSubscriptionActive,
   upsertProfileToSupabase,
 } from "@/lib/profileSupabase";
@@ -40,14 +41,20 @@ import { verifySubscriptionOnLaunch } from "@/lib/iap";
 import { PaywallScreen } from "./PaywallScreen";
 import {
   isTrialExhausted,
-  isTrialScanBypassActive,
   migrateTrialState,
   recordScanUsed,
+  resolveAuthEmail,
+  isProBypassEmail,
 } from "@/lib/trial";
 import { RECIPIFY_PROFILE_STORAGE_KEY } from "@/lib/profileStorage";
 import { initReminderSync } from "@/lib/reminderNotifications";
 import { DashboardScreen } from "./DashboardScreen";
 import { DashboardEntryCard } from "./DashboardEntryCard";
+
+const COOK_INITIAL_RECIPE_COUNT = 4;
+const COOK_MORE_RECIPE_COUNT = 2;
+const COOK_MAX_RECIPES = 6;
+
 export function RecipifyApp() {
   const mockIngredients = [
     "eggs",
@@ -63,8 +70,9 @@ export function RecipifyApp() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ingredients, setIngredients] = useState<string[]>([]);
-  /** Cook tab: hardcoded meal library matches (after vision scan). */
+  /** Cook tab: AI-generated recipes from scanned ingredients. */
   const [matchedRecipePool, setMatchedRecipePool] = useState<RecipeResultItem[]>([]);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const recipes = useMemo(
     () => filterRecipeResults(matchedRecipePool, selectedDiet, selectedTime),
@@ -93,14 +101,14 @@ export function RecipifyApp() {
 
   // Pro status is derived from the profile object (profile_data JSON in Supabase).
   // `isProSubscriptionActive` checks isPro flag AND subscription_expires_at.
-  const trialBypass = useMemo(
-    () => isTrialScanBypassActive(user?.email ?? undefined),
-    [user?.email]
-  );
+  const authEmail = resolveAuthEmail(user);
+  const trialBypass = isProBypassEmail(authEmail);
   const effectivePro = isProSubscriptionActive(profile) || trialBypass;
 
   /** Drives re-render of ScanCounter after each scan. */
   const [scanCountTick, setScanCountTick] = useState(0);
+  /** Cook generate progress label for loading overlays. */
+  const [loadingPhase, setLoadingPhase] = useState<"idle" | "scanning" | "generating">("idle");
   /** True when the full-screen paywall is open (4th scan intercepted). */
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(false);
@@ -225,9 +233,19 @@ export function RecipifyApp() {
   // On login: verify subscription is still active against RevenueCat / local expiry
   useEffect(() => {
     if (!user?.id || !profileReady) return;
-    void verifySubscriptionOnLaunch(user.id, profile, setProfile);
+    void verifySubscriptionOnLaunch(user.id, profile, setProfile, authEmail);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, profileReady]); // run once per session when user+profile are ready
+  }, [user?.id, profileReady, authEmail]);
+
+  // Lifetime Pro for support / owner accounts — apply immediately in UI + Supabase
+  useEffect(() => {
+    if (!user?.id || !profileReady || !trialBypass) return;
+    void ensureProBypassForUser(user.id, authEmail);
+    setProfile((prev) => {
+      if (!prev || prev.isPro) return prev;
+      return { ...prev, isPro: true, subscriptionExpiresAt: null };
+    });
+  }, [user?.id, profileReady, trialBypass, authEmail, setProfile]);
 
   useEffect(() => {
     if (!user?.id || !profileReady || profile === null) return;
@@ -290,9 +308,17 @@ export function RecipifyApp() {
     return () => window.removeEventListener("recipify-achievements", onAchievements);
   }, []);
 
+  const loadingMessage =
+    loadingPhase === "generating"
+      ? "Creating recipes…"
+      : loadingPhase === "scanning"
+        ? "Detecting ingredients…"
+        : undefined;
+
   const onImageChange = (img: string | null) => {
     setCurrentImage(img);
     setMatchedRecipePool([]);
+    setLoadingMore(false);
     setError(null);
     if (img) {
       setIngredients([]);
@@ -316,18 +342,30 @@ export function RecipifyApp() {
 
     setError(null);
     setLoading(true);
+    setLoadingPhase("scanning");
     setMatchedRecipePool([]);
 
     try {
-      const base64 = currentImage.split(",")[1] ?? "";
-      const mimeType = currentImage.split(";")[0]?.split(":")[1] || "image/jpeg";
-      let detectedIngredients = await detectFridgeIngredients(base64, mimeType, profile);
-      if (!detectedIngredients.length) detectedIngredients = [...mockIngredients];
-      setIngredients(detectedIngredients);
+      let detectedIngredients = ingredients;
 
-      // Only OpenAI call: ingredient vision. Recipes come from the hardcoded library.
-      const matched = matchRecipesFromIngredients(detectedIngredients, profile);
-      setMatchedRecipePool(matched);
+      if (!detectedIngredients.length) {
+        const base64 = currentImage.split(",")[1] ?? "";
+        const mimeType = currentImage.split(";")[0]?.split(":")[1] || "image/jpeg";
+        detectedIngredients = await detectFridgeIngredients(base64, mimeType, profile);
+        if (!detectedIngredients.length) detectedIngredients = [...mockIngredients];
+        setIngredients(detectedIngredients);
+      }
+
+      setLoadingPhase("generating");
+
+      const aiRecipes = await fetchCookRecipesFromApi({
+        ingredients: detectedIngredients,
+        dietaryPreference: selectedDiet,
+        maxCookTime: selectedTime,
+        profile,
+        count: COOK_INITIAL_RECIPE_COUNT,
+      });
+      setMatchedRecipePool(aiRecipes.slice(0, COOK_INITIAL_RECIPE_COUNT));
 
       // Consume one free scan (local + background Supabase sync)
       if (!effectivePro) {
@@ -342,6 +380,37 @@ export function RecipifyApp() {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setLoading(false);
+      setLoadingPhase("idle");
+    }
+  };
+
+  const onGenerateMore = async () => {
+    if (!ingredients.length || matchedRecipePool.length >= COOK_MAX_RECIPES || loadingMore) {
+      return;
+    }
+
+    setError(null);
+    setLoadingMore(true);
+
+    try {
+      const additional = await fetchCookRecipesFromApi({
+        ingredients,
+        dietaryPreference: selectedDiet,
+        maxCookTime: selectedTime,
+        profile,
+        count: COOK_MORE_RECIPE_COUNT,
+        excludeTitles: matchedRecipePool.map((r) => r.name),
+      });
+
+      setMatchedRecipePool((prev) => {
+        const seen = new Set(prev.map((r) => r.name.toLowerCase()));
+        const unique = additional.filter((r) => !seen.has(r.name.toLowerCase()));
+        return [...prev, ...unique].slice(0, COOK_MAX_RECIPES);
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not generate more recipes.");
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -419,13 +488,13 @@ export function RecipifyApp() {
 
 
       {activeTab === "cook" ? (
-        <main className="pb-[calc(5rem+env(safe-area-inset-bottom,0px))]">
+        <main className="tab-page w-full">
           <div style={{ animation: "fadeInDown 0.4s ease both" }}>
             <HeroSection />
           </div>
 
           <div
-            className="relative z-20 mx-auto -mt-8 max-w-[430px] space-y-3 px-4"
+            className="app-shell relative z-20 -mt-6 space-y-3 px-4"
             style={{ animation: "fadeInUp 0.45s ease both", animationDelay: "0.05s" }}
           >
             {profile ? (
@@ -442,6 +511,7 @@ export function RecipifyApp() {
               currentImage={currentImage}
               onImageChange={onImageChange}
               loading={loading}
+              loadingMessage={loadingMessage}
             />
           </div>
 
@@ -460,6 +530,7 @@ export function RecipifyApp() {
             <RecipeResultsSection
               error={error}
               loading={loading}
+              loadingMessage={loadingMessage}
               ingredients={ingredients}
               hasUploadedPhoto={Boolean(currentImage)}
               recipes={recipes}
@@ -478,6 +549,13 @@ export function RecipifyApp() {
                 })
               }
               onGenerateRecipes={onGenerate}
+              onGenerateMore={onGenerateMore}
+              loadingMore={loadingMore}
+              canGenerateMore={
+                ingredients.length > 0 &&
+                matchedRecipePool.length > 0 &&
+                matchedRecipePool.length < COOK_MAX_RECIPES
+              }
               onLogMeal={logMeal}
               onReset={() => {
                 onImageChange(null);
@@ -510,7 +588,7 @@ export function RecipifyApp() {
             }}
           />
         ) : (
-          <section className="mx-auto max-w-[920px] px-5 py-8 pb-24">
+          <section className="tab-page app-shell px-4 py-8">
             <div className="rounded-2xl border border-[var(--border)] bg-[var(--white)] p-5">
               <h2 className="font-playfair text-2xl text-[var(--green)]">Profile needed</h2>
               <p className="mt-2 text-sm text-[var(--gray)]">
@@ -543,7 +621,7 @@ export function RecipifyApp() {
             }
           />
         ) : (
-          <section className="mx-auto max-w-[920px] px-5 py-8 pb-24">
+          <section className="tab-page app-shell px-4 py-8">
             <div className="rounded-2xl border border-[var(--border)] bg-[var(--white)] p-5">
               <h2 className="font-playfair text-2xl text-[var(--green)]">Profile setup needed</h2>
               <p className="mt-2 text-sm text-[var(--gray)]">
@@ -561,8 +639,8 @@ export function RecipifyApp() {
         )
       )}
 
-      <footer className="border-t border-[var(--border)] px-6 py-6 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] text-center text-xs text-[var(--gray)] md:pb-6">
-        ChefCoach — Made with ❤️ and your leftovers
+      <footer className="hidden border-t border-[var(--border)] px-6 py-6 text-center text-xs text-[var(--gray)] md:block">
+        ChefCoach — Made with care and your leftovers
       </footer>
       <BottomNavigation
         activeTab={activeTab}
@@ -574,7 +652,6 @@ export function RecipifyApp() {
         achievement={celebrationQueue[0] ?? null}
         onDismiss={() => setCelebrationQueue((q) => q.slice(1))}
       />
-      <ChatBot hidden={activeTab === "profile" || dashboardOpen} />
       {profile ? (
         <DashboardScreen
           open={dashboardOpen}

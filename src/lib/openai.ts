@@ -3,22 +3,44 @@ import type {
   TimeFilter,
   UserProfile,
 } from "@/types";
+import { Capacitor } from "@capacitor/core";
 import { profilePromptExtras } from "@/lib/profile-prompt";
+import { compressImageDataUrl } from "@/lib/compressImageDataUrl";
+import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
 
-/** Vision-only: detect ingredient strings from a fridge photo. No recipe generation. */
+/** Vision-only: detect ingredient strings from a fridge photo. Never throws — returns [] on failure. */
 export async function detectFridgeIngredients(
   imageBase64: string,
   mimeType: string,
   profile?: UserProfile | null
 ): Promise<string[]> {
   const apiKey = import.meta.env.VITE_OPENAI_API_KEY || "";
+  const isNative = Capacitor.isNativePlatform();
+
   if (!apiKey) {
-    throw new Error("Missing OpenAI key. Set VITE_OPENAI_API_KEY in .env.local.");
+    return [];
   }
 
-  const profileNote = profile ? profilePromptExtras(profile) : "";
+  const visionTimeoutMs = isNative ? 45_000 : 60_000;
 
-  const prompt = `You analyze fridge / pantry photos. Respond with ONLY valid JSON (no markdown):
+  try {
+    const dataUrl = imageBase64.startsWith("data:")
+      ? imageBase64
+      : `data:${mimeType};base64,${imageBase64}`;
+
+    let compressed: { base64: string; mimeType: string };
+    try {
+      compressed = await compressImageDataUrl(dataUrl);
+    } catch {
+      compressed = {
+        base64: imageBase64.startsWith("data:") ? (imageBase64.split(",")[1] ?? "") : imageBase64,
+        mimeType,
+      };
+    }
+
+    const profileNote = profile ? profilePromptExtras(profile) : "";
+
+    const prompt = `You analyze fridge / pantry photos. Respond with ONLY valid JSON (no markdown):
 {"ingredients":["item1","item2","item3"]}
 
 Rules:
@@ -29,49 +51,55 @@ Rules:
 
 Return ONLY the JSON object.`;
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4o",
-      max_tokens: 600,
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: prompt },
-            {
-              type: "image_url",
-              image_url: { url: `data:${mimeType};base64,${imageBase64}` },
-            },
-          ],
-        },
-      ],
-    }),
-  });
+    const response = await fetchWithTimeout("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        max_tokens: 500,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: prompt },
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:${compressed.mimeType};base64,${compressed.base64}`,
+                  detail: "low",
+                },
+              },
+            ],
+          },
+        ],
+      }),
+      timeoutMs: visionTimeoutMs,
+    });
 
-  if (!response.ok) {
-    const err = (await response.json().catch(() => ({}))) as {
-      error?: { message?: string };
+    if (!response.ok) {
+      return [];
+    }
+
+    const data = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
     };
-    throw new Error(err.error?.message ?? "API error. Check key and try again.");
+    let raw = data.choices?.[0]?.message?.content?.trim() ?? "";
+    raw = raw.replace(/```json/g, "").replace(/```/g, "").trim();
+
+    const parsed = JSON.parse(raw) as { ingredients?: unknown };
+    const arr = Array.isArray(parsed.ingredients) ? parsed.ingredients : [];
+    const out = arr
+      .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+      .map((s) => s.trim().toLowerCase());
+
+    return out;
+  } catch {
+    return [];
   }
-
-  const data = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  let raw = data.choices?.[0]?.message?.content?.trim() ?? "";
-  raw = raw.replace(/```json/g, "").replace(/```/g, "").trim();
-
-  const parsed = JSON.parse(raw) as { ingredients?: unknown };
-  const arr = Array.isArray(parsed.ingredients) ? parsed.ingredients : [];
-  const out = arr
-    .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
-    .map((s) => s.trim().toLowerCase());
-  return out.length ? out : [];
 }
 
 /** @deprecated Use detectFridgeIngredients + local meal matching instead. */

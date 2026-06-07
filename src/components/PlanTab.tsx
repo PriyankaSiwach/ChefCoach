@@ -15,6 +15,17 @@ import {
 } from "@/lib/grocery-list";
 import { formatLocalDate, WEEKDAY_LABELS } from "@/lib/gamification";
 import {
+  AlertIcon,
+  ClipboardListIcon,
+  IconLabel,
+  MacroStatGrid,
+  ShoppingCartIcon,
+  SparklesIcon,
+  TrashIcon,
+} from "@/components/icons/AppIcons";
+import type { LucideIcon } from "lucide-react";
+import { Beef, Milk, Package, Salad } from "lucide-react";
+import {
   getDailyMeal,
   getRandomMealIdeas,
   getSafeMeals,
@@ -50,8 +61,10 @@ function AllergenLine({
         hasUserAllergen ? "text-red-600" : "text-amber-600"
       }`}
     >
-      ⚠️ Contains: {allergens.join(", ")}
-      {hasUserAllergen && " — may not be safe for your profile"}
+      <IconLabel icon={<AlertIcon className="h-3.5 w-3.5" />}>
+        Contains: {allergens.join(", ")}
+        {hasUserAllergen && " — may not be safe for your profile"}
+      </IconLabel>
     </p>
   );
 }
@@ -99,7 +112,7 @@ function MealDetailSheet({
         {/* Hero ingredient + type tags */}
         <div className="flex flex-wrap items-center gap-2 px-5 pb-3">
           <span className="flex items-center gap-1 rounded-full bg-[var(--green)] px-3 py-1 text-[11px] font-semibold text-white">
-            🥩 {hero}
+            {hero}
           </span>
           <span className="rounded-full bg-[var(--gray-light)] px-2 py-0.5 text-[10px] font-semibold uppercase text-[var(--gray)]">
             {meal.type}
@@ -115,24 +128,13 @@ function MealDetailSheet({
         </div>
 
         {/* Macro row */}
-        <div className="mx-5 mb-3 grid grid-cols-4 gap-2 rounded-2xl bg-[var(--cream)] p-3">
-          <div className="text-center">
-            <p className="text-base font-bold text-[var(--text)]">{meal.calories}</p>
-            <p className="text-[10px] text-[var(--gray)]">🔥 kcal</p>
-          </div>
-          <div className="text-center">
-            <p className="text-base font-bold text-[var(--green)]">{meal.protein_g}g</p>
-            <p className="text-[10px] text-[var(--gray)]">💪 protein</p>
-          </div>
-          <div className="text-center">
-            <p className="text-base font-bold text-[var(--text)]">{meal.carbs_g}g</p>
-            <p className="text-[10px] text-[var(--gray)]">🍞 carbs</p>
-          </div>
-          <div className="text-center">
-            <p className="text-base font-bold text-[var(--text)]">{meal.fat_g}g</p>
-            <p className="text-[10px] text-[var(--gray)]">🥑 fat</p>
-          </div>
-        </div>
+        <MacroStatGrid
+          calories={meal.calories}
+          protein={meal.protein_g}
+          carbs={meal.carbs_g}
+          fat={meal.fat_g}
+          className="mx-5 mb-3"
+        />
 
         {/* Allergen warning */}
         {meal.allergens.length > 0 ? (
@@ -141,7 +143,9 @@ function MealDetailSheet({
               flagged ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700"
             }`}
           >
-            ⚠️ Contains: {meal.allergens.join(", ")} — check labels before cooking
+            <IconLabel icon={<AlertIcon className="h-3.5 w-3.5" />}>
+              Contains: {meal.allergens.join(", ")} — check labels before cooking
+            </IconLabel>
             {flagged && (
               <div className="mt-1 font-semibold text-red-700">
                 This dish may not be safe for your dietary profile
@@ -362,12 +366,12 @@ type GroceryCategory = "Produce" | "Dairy" | "Meat" | "Pantry" | "Other";
 
 const CATEGORY_ORDER: GroceryCategory[] = ["Produce", "Dairy", "Meat", "Pantry", "Other"];
 
-const CATEGORY_EMOJI: Record<GroceryCategory, string> = {
-  Produce: "🥦",
-  Dairy: "🧀",
-  Meat: "🍗",
-  Pantry: "🫙",
-  Other: "📦",
+const CATEGORY_ICON: Record<GroceryCategory, LucideIcon> = {
+  Produce: Salad,
+  Dairy: Milk,
+  Meat: Beef,
+  Pantry: Package,
+  Other: Package,
 };
 
 const QUICK_ADD_CHIPS = ["Milk", "Eggs", "Bread", "Onion", "Tomato", "Rice", "Chicken", "Yogurt"];
@@ -460,7 +464,7 @@ function GrocerySubTab() {
   };
 
   return (
-    <section className="mx-auto max-w-[920px] px-5 pt-6 pb-4">
+    <section className="app-shell px-4 pt-6 pb-4">
 
       {/* Quick-add chips */}
       <div>
@@ -551,7 +555,7 @@ function GrocerySubTab() {
       {/* Empty state */}
       {total === 0 ? (
         <div className="mt-10 flex flex-col items-center gap-3 text-center">
-          <span className="text-4xl">🛒</span>
+          <ShoppingCartIcon className="h-10 w-10 text-[var(--green)]" aria-hidden />
           <p className="font-playfair text-lg text-[var(--green)]">Your list is empty</p>
           <p className="text-sm text-[var(--gray)]">
             Tap a quick-add chip above or type an item to start your list.
@@ -567,7 +571,11 @@ function GrocerySubTab() {
           return (
             <div key={cat}>
               <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--gray)]">
-                {CATEGORY_EMOJI[cat]} {cat}
+                {(() => {
+                  const CatIcon = CATEGORY_ICON[cat];
+                  return <CatIcon className="h-3.5 w-3.5" aria-hidden />;
+                })()}
+                {cat}
                 <span className="rounded-full bg-[var(--gray-light)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--gray)]">
                   {catItems.length}
                 </span>
@@ -619,10 +627,10 @@ function GrocerySubTab() {
                     <button
                       type="button"
                       onClick={() => removeItem(item.id)}
-                      className="shrink-0 text-[var(--gray)] opacity-40 hover:opacity-80"
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--gray)] opacity-70 hover:bg-[var(--gray-light)] hover:opacity-100 active:scale-95"
                       aria-label={`Remove ${item.label}`}
                     >
-                      ✕
+                      <TrashIcon className="h-4 w-4" aria-hidden />
                     </button>
                   </li>
                 ))}
@@ -765,8 +773,8 @@ export function PlanTab({
   const tips = QUICK_TIPS[profile.goal];
 
   return (
-    <main className="pb-28 md:pb-12">
-      <section className="mx-auto max-w-[920px] px-5 pt-6">
+    <main className="tab-page w-full">
+      <section className="app-shell px-4 pt-6">
         <div className="rounded-3xl bg-gradient-to-r from-[var(--green)] to-[var(--green-light)] p-5 text-[var(--cream)] shadow-md">
           <h1 className="font-playfair text-3xl">Plan</h1>
         </div>
@@ -774,9 +782,9 @@ export function PlanTab({
         <div className="mt-5 flex flex-wrap gap-2">
           {(
             [
-              ["week", "📅 This Week"],
-              ["grocery", "🛒 Grocery"],
-              ["ideas", "🥗 Meal Ideas"],
+              ["week", "This Week"],
+              ["grocery", "Grocery"],
+              ["ideas", "Meal Ideas"],
             ] as const
           ).map(([id, label]) => (
             <button
@@ -797,7 +805,7 @@ export function PlanTab({
 
       {/* ── This Week ── */}
       {subTab === "week" ? (
-        <section className="mx-auto max-w-[920px] px-5 pt-6">
+        <section className="app-shell px-4 pt-6">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 sm:items-start">
             {mealPlan.days.map((d, i) => {
               const expanded = expandedDays.has(d.dateStr);
@@ -854,7 +862,7 @@ export function PlanTab({
                                 value={slotValue}
                                 onChange={(e) => onSlotChange(d.dateStr, slot, e.target.value)}
                                 onClick={(e) => e.stopPropagation()}
-                                placeholder="Tap ✨ to get a suggestion"
+                                placeholder="Tap Suggest to get a recipe idea"
                               />
                               <button
                                 type="button"
@@ -864,7 +872,7 @@ export function PlanTab({
                                 }}
                                 className="w-full rounded-full border border-[var(--green)] bg-[var(--green-pale)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--green)] sm:w-auto sm:whitespace-nowrap"
                               >
-                                ✨ Suggest
+                                <IconLabel icon={<SparklesIcon className="h-3.5 w-3.5" />}>Suggest</IconLabel>
                               </button>
                             </div>
 
@@ -879,13 +887,12 @@ export function PlanTab({
                                   onClick={() => setDetailMeal(libraryMeal)}
                                   className="ml-auto flex items-center gap-1 rounded-full border border-[var(--green)] bg-[var(--green-pale)] px-2.5 py-1 text-[11px] font-semibold text-[var(--green)]"
                                 >
-                                  📋 Steps
+                                  <IconLabel icon={<ClipboardListIcon className="h-3.5 w-3.5" />}>Steps</IconLabel>
                                 </button>
                               </div>
                             ) : slotValue.trim() ? (
-                              /* Custom text typed by user — no library entry */
                               <p className="mt-1 text-[11px] text-[var(--gray)]">
-                                Custom meal — tap ✨ to replace with a recipe
+                                Custom meal — tap Suggest to replace with a recipe
                               </p>
                             ) : null}
                           </div>
@@ -905,7 +912,7 @@ export function PlanTab({
 
       {/* ── Meal Ideas ── */}
       {subTab === "ideas" ? (
-        <section className="mx-auto max-w-[920px] px-5 pt-6">
+        <section className="app-shell px-4 pt-6">
           <button
             type="button"
             onClick={refreshMealIdeas}

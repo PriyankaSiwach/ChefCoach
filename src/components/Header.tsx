@@ -1,6 +1,13 @@
 
 import { useState } from "react";
 import { BrandLogo } from "@/components/BrandLogo";
+import {
+  CalendarIcon,
+  ChefHatIcon,
+  HeartIcon,
+  IconLabel,
+  UserIcon,
+} from "@/components/icons/AppIcons";
 
 type Props = {
   activeTab: "cook" | "saved" | "plan" | "profile";
@@ -23,34 +30,37 @@ export function Header({
 
   return (
     <>
-      <header className="sticky top-0 z-50 flex items-center justify-between bg-[var(--green)] px-6 py-4">
-        <BrandLogo />
-        <button
-          type="button"
-          className="rounded-full border border-white/35 px-3 py-1 text-2xl leading-none text-[var(--cream)] md:hidden"
-          aria-label="Open navigation menu"
-          onClick={() => setOpenMobileMenu(true)}
-        >
-          ☰
-        </button>
-        <div className="hidden gap-2 md:flex">
+      <header className="sticky top-0 z-50 w-full max-w-[100vw] overflow-x-clip bg-[var(--green)] pt-[env(safe-area-inset-top,0px)]">
+        <div className="app-shell flex items-center justify-between px-4 py-3">
+          <BrandLogo className="min-w-0 shrink-0" />
+          <button
+            type="button"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/35 text-[var(--cream)] md:hidden"
+            aria-label="Open navigation menu"
+            onClick={() => setOpenMobileMenu(true)}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </button>
+          <div className="hidden gap-2 md:flex">
           <button
             className={`${base} ${activeTab === "cook" ? active : ""}`}
             onClick={() => onTabChange("cook")}
           >
-            🍳 Cook
+            <IconLabel icon={<ChefHatIcon />}>Cook</IconLabel>
           </button>
           <button
             className={`${base} ${activeTab === "saved" ? active : ""}`}
             onClick={() => onTabChange("saved")}
           >
-            ❤️ Saved ({favouritesCount})
+            <IconLabel icon={<HeartIcon />}>Saved ({favouritesCount})</IconLabel>
           </button>
           <button
             className={`${base} ${activeTab === "plan" ? active : ""}`}
             onClick={() => onTabChange("plan")}
           >
-            📅 Plan
+            <IconLabel icon={<CalendarIcon />}>Plan</IconLabel>
           </button>
           <button
             className={`${base} flex items-center gap-2 ${activeTab === "profile" ? active : ""}`}
@@ -63,17 +73,18 @@ export function Header({
                 className="h-7 w-7 shrink-0 rounded-full border border-white/40 object-cover"
               />
             ) : (
-              <span aria-hidden>👤</span>
+              <UserIcon className="h-5 w-5" aria-hidden />
             )}
             Profile
           </button>
+        </div>
         </div>
       </header>
 
       {openMobileMenu ? (
         <div className="fixed inset-0 z-[70] bg-black/40 md:hidden" onClick={() => setOpenMobileMenu(false)}>
           <div
-            className="absolute inset-x-0 bottom-0 rounded-t-3xl bg-[var(--white)] p-5 shadow-xl"
+            className="absolute inset-x-0 bottom-0 rounded-t-3xl bg-[var(--white)] p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-[var(--border)]" />
@@ -87,7 +98,7 @@ export function Header({
                 }}
                 className="w-full rounded-2xl border border-[var(--border)] px-4 py-3 text-left text-sm"
               >
-                🍳 Cook
+                <IconLabel icon={<ChefHatIcon />}>Cook</IconLabel>
               </button>
               <button
                 type="button"
@@ -97,7 +108,7 @@ export function Header({
                 }}
                 className="w-full rounded-2xl border border-[var(--border)] px-4 py-3 text-left text-sm"
               >
-                ❤️ Saved ({favouritesCount})
+                <IconLabel icon={<HeartIcon />}>Saved ({favouritesCount})</IconLabel>
               </button>
               <button
                 type="button"
@@ -107,7 +118,7 @@ export function Header({
                 }}
                 className="w-full rounded-2xl border border-[var(--border)] px-4 py-3 text-left text-sm"
               >
-                📅 Plan
+                <IconLabel icon={<CalendarIcon />}>Plan</IconLabel>
               </button>
               <button
                 type="button"
@@ -124,9 +135,7 @@ export function Header({
                     className="h-9 w-9 shrink-0 rounded-full border border-[var(--border)] object-cover"
                   />
                 ) : (
-                  <span aria-hidden className="text-xl">
-                    👤
-                  </span>
+                  <UserIcon className="h-6 w-6" aria-hidden />
                 )}
                 Profile
               </button>

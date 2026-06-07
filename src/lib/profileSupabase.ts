@@ -1,5 +1,6 @@
 import type { UserProfile } from "@/types";
 import { supabase } from "@/lib/supabaseClient";
+import { isProBypassEmail, resolveAuthEmail } from "@/lib/trial";
 import { isProSubscriptionActive, normalizeUserProfile, RECIPIFY_PROFILE_STORAGE_KEY } from "@/lib/profileStorage";
 
 // ─── Subscription / Pro status ────────────────────────────────────────────────
@@ -97,8 +98,21 @@ export function patchLocalProfileScansUsed(scansUsed: number): void {
 // Re-export so callers don't need to import from profileStorage separately
 export { isProSubscriptionActive };
 
+/** Grant lifetime Pro in Supabase + localStorage for bypass emails. */
+export async function ensureProBypassForUser(
+  userId: string,
+  email?: string | null
+): Promise<void> {
+  const authEmail = email ?? resolveAuthEmail(null);
+  if (!isProBypassEmail(authEmail)) return;
+  await setProStatus(userId, true, null);
+}
+
 /** Pull `profiles.profile_data` into localStorage and notify listeners. */
-export async function pullProfileFromSupabase(userId: string): Promise<void> {
+export async function pullProfileFromSupabase(
+  userId: string,
+  email?: string | null
+): Promise<void> {
   const { data, error } = await supabase
     .from("profiles")
     .select("profile_data")
@@ -127,12 +141,22 @@ export async function pullProfileFromSupabase(userId: string): Promise<void> {
     return;
   }
 
+  const authEmail = email ?? resolveAuthEmail(null);
+  const profileToSave =
+    isProBypassEmail(authEmail)
+      ? { ...normalized, isPro: true, subscriptionExpiresAt: null }
+      : normalized;
+
   try {
-    window.localStorage.setItem(RECIPIFY_PROFILE_STORAGE_KEY, JSON.stringify(normalized));
+    window.localStorage.setItem(RECIPIFY_PROFILE_STORAGE_KEY, JSON.stringify(profileToSave));
   } catch {
     /* ignore */
   }
   window.dispatchEvent(new CustomEvent("recipify-profile-sync"));
+
+  if (isProBypassEmail(authEmail)) {
+    await setProStatus(userId, true, null);
+  }
 }
 
 export async function upsertProfileToSupabase(

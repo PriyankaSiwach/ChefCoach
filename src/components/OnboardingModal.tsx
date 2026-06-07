@@ -8,12 +8,23 @@ import {
   defaultUserProfile,
   normalizeCuisineLabel,
   RECIPIFY_PROFILE_STORAGE_KEY,
+  PROFILE_CUISINE_OPTIONS,
 } from "@/lib/profileStorage";
 import { ALLERGY_OPTIONS, DIETARY_STYLE_OPTIONS, isDietStyleOption } from "@/lib/dietConstants";
 import { upsertProfileToSupabase } from "@/lib/profileSupabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { AllergySafetyNotice } from "@/components/AllergySafetyNotice";
 import { UnitToggleInput } from "@/components/UnitToggleInput";
+import {
+  ChefHatIcon,
+  HeartIcon,
+  IconLabel,
+  MacroProteinIcon,
+  SparklesIcon,
+  TargetIcon,
+  UserIcon,
+} from "@/components/icons/AppIcons";
+import { Activity, Scale, UtensilsCrossed } from "lucide-react";
 
 type Props = {
   initialProfile?: UserProfile | null;
@@ -22,31 +33,17 @@ type Props = {
 
 const allergies = [...ALLERGY_OPTIONS];
 const dietaryStyles = [...DIETARY_STYLE_OPTIONS];
-const CUISINES = [
-  "🇮🇹 Italian",
-  "🇮🇳 Indian",
-  "🇪🇸 Spanish",
-  "🇺🇸 American",
-  "🇲🇽 Mexican",
-  "🇬🇷 Mediterranean",
-  "🥢 Asian",
-  "🇯🇵 Japanese",
-  "🇹🇭 Thai",
-  "🌍 Middle Eastern",
-  "🇬🇧 British",
-  "🇫🇷 French",
-  "🇰🇷 Korean",
-];
+const CUISINES = [...PROFILE_CUISINE_OPTIONS];
 
 const STEP_LABELS = ["About you", "Lifestyle", "Diet", "Goals", "Cuisines"];
 
 const HEALTH_FOCUS_CHIPS: { id: HealthFocusId; label: string }[] = [
-  { id: "diabetes", label: "🩺 Managing diabetes" },
-  { id: "heart", label: "❤️ Heart health" },
-  { id: "bone_joint", label: "🦴 Bone & joint health" },
-  { id: "sleep_energy", label: "😴 Better sleep & energy" },
-  { id: "sports", label: "💪 Sports performance" },
-  { id: "none", label: "✨ No specific focus" },
+  { id: "diabetes", label: "Managing diabetes" },
+  { id: "heart", label: "Heart health" },
+  { id: "bone_joint", label: "Bone & joint health" },
+  { id: "sleep_energy", label: "Better sleep & energy" },
+  { id: "sports", label: "Sports performance" },
+  { id: "none", label: "No specific focus" },
 ];
 
 type Motivation = "fun" | "just_cooking" | "health" | "family";
@@ -87,16 +84,7 @@ function initialCuisineChipsFromProfile(profile: UserProfile | null | undefined)
   if (canon.length === 0) return [];
   const chips: string[] = [];
   for (const c of canon) {
-    if (c === "Asian") {
-      const chip = CUISINES.find((x) => x.includes("🥢")) ?? "🥢 Asian";
-      if (!chips.includes(chip)) chips.push(chip);
-      continue;
-    }
-    const found = CUISINES.find((chip) => {
-      const s = chip.replace(/^[\p{Emoji}\s]+/u, "").trim();
-      return s.toLowerCase() === c.toLowerCase();
-    });
-    if (found && !chips.includes(found)) chips.push(found);
+    if (!chips.includes(c)) chips.push(c);
   }
   return chips;
 }
@@ -346,10 +334,11 @@ export function OnboardingModal({ initialProfile, onComplete }: Props) {
   const stepHint = stepHintForStep(step);
 
   return (
-    <main className="min-h-screen bg-[var(--cream)] px-4 py-6 md:px-6 md:py-8">
-      <section className="mx-auto w-full max-w-[680px] rounded-3xl border border-[var(--border)] bg-[var(--white)] p-5 shadow-sm md:p-8">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h1 className="font-playfair text-3xl text-[var(--green)] md:text-4xl">
+    <main className="screen-overlay fixed inset-0 z-[95] overflow-x-hidden overflow-y-auto bg-[var(--cream)]">
+      <div className="mx-auto flex min-h-full w-full max-w-[680px] flex-col px-4 py-5 sm:px-5 sm:py-6">
+      <section className="w-full min-w-0 flex-1 rounded-3xl border border-[var(--border)] bg-[var(--white)] p-4 shadow-sm sm:p-6 md:p-8">
+        <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+          <h1 className="min-w-0 font-playfair text-2xl leading-snug text-[var(--green)] sm:text-3xl md:text-4xl">
             {titleForStep(step)}
           </h1>
           <span className="shrink-0 text-xs text-[var(--gray)]">Step {step} of 5</span>
@@ -361,7 +350,7 @@ export function OnboardingModal({ initialProfile, onComplete }: Props) {
             style={{ width: progress }}
           />
         </div>
-        <div className="mb-5 flex flex-wrap items-center justify-center gap-x-1 gap-y-1 text-center text-[10px] leading-tight text-[var(--gray)]">
+        <div className="mb-5 flex flex-wrap items-center justify-center gap-x-1 gap-y-1 text-center text-[10px] leading-tight text-[var(--gray)] sm:text-[11px]">
           {STEP_LABELS.map((label, i) => (
             <span key={label} className="inline-flex items-center gap-1">
               {i > 0 ? <span className="text-[var(--border)]">→</span> : null}
@@ -463,44 +452,44 @@ export function OnboardingModal({ initialProfile, onComplete }: Props) {
           <div className={`space-y-3 ${slideClass}`}>
             <div className="flex flex-wrap gap-2">
               {[
-                { k: "lose_weight", l: "🎯 Lose weight" },
-                { k: "build_muscle", l: "💪 Build muscle" },
-                { k: "maintain_weight", l: "⚖️ Stay balanced" },
-              ].map((g) => (
+                { k: "lose_weight", l: "Lose weight", Icon: TargetIcon },
+                { k: "build_muscle", l: "Build muscle", Icon: MacroProteinIcon },
+                { k: "maintain_weight", l: "Stay balanced", Icon: Scale },
+              ].map(({ k, l, Icon }) => (
                 <button
-                  key={g.k}
+                  key={k}
                   type="button"
                   className={`rounded-full border px-3 py-2 text-xs ${
-                    profile.goal === g.k
+                    profile.goal === k
                       ? "border-[var(--green)] bg-[var(--green)] text-white"
                       : "border-[var(--border)]"
                   }`}
-                  onClick={() => update("goal", g.k as UserProfile["goal"])}
+                  onClick={() => update("goal", k as UserProfile["goal"])}
                 >
-                  {g.l}
+                  <IconLabel icon={<Icon className="h-3.5 w-3.5" aria-hidden />}>{l}</IconLabel>
                 </button>
               ))}
             </div>
             <div className="flex flex-wrap gap-2">
               {[
-                { k: "sedentary", l: "🛋️ Mostly sitting" },
-                { k: "light", l: "🚶 Lightly active" },
-                { k: "gym_regular", l: "🏋️ Gym regular" },
-                { k: "athlete", l: "🏃 Very active" },
-              ].map((a) => (
+                { k: "sedentary", l: "Mostly sitting", Icon: Scale },
+                { k: "light", l: "Lightly active", Icon: Activity },
+                { k: "gym_regular", l: "Gym regular", Icon: MacroProteinIcon },
+                { k: "athlete", l: "Very active", Icon: Activity },
+              ].map(({ k, l, Icon }) => (
                 <button
-                  key={a.k}
+                  key={k}
                   type="button"
                   className={`rounded-full border px-3 py-2 text-xs ${
-                    profile.activityLevel === a.k
+                    profile.activityLevel === k
                       ? "border-[var(--green)] bg-[var(--green)] text-white"
                       : "border-[var(--border)]"
                   }`}
                   onClick={() =>
-                    update("activityLevel", a.k as UserProfile["activityLevel"])
+                    update("activityLevel", k as UserProfile["activityLevel"])
                   }
                 >
-                  {a.l}
+                  <IconLabel icon={<Icon className="h-3.5 w-3.5" aria-hidden />}>{l}</IconLabel>
                 </button>
               ))}
             </div>
@@ -518,7 +507,10 @@ export function OnboardingModal({ initialProfile, onComplete }: Props) {
                       : "border-[var(--border)]"
                   }`}
                 >
-                  <p className="text-sm font-semibold text-[var(--text)]">✨ For fun</p>
+                  <p className="flex items-center gap-2 text-sm font-semibold text-[var(--text)]">
+                    <SparklesIcon className="h-4 w-4" />
+                    For fun
+                  </p>
                   <p className="mt-1 text-xs text-[var(--gray)]">
                     I want healthy ideas and variety.
                   </p>
@@ -532,8 +524,9 @@ export function OnboardingModal({ initialProfile, onComplete }: Props) {
                       : "border-[var(--border)]"
                   }`}
                 >
-                  <p className="text-sm font-semibold text-[var(--text)]">
-                    🍳 Just for cooking
+                  <p className="flex items-center gap-2 text-sm font-semibold text-[var(--text)]">
+                    <ChefHatIcon className="h-4 w-4" />
+                    Just for cooking
                   </p>
                   <p className="mt-1 text-xs text-[var(--gray)]">
                     Keep it simple and easy to cook.
@@ -548,8 +541,9 @@ export function OnboardingModal({ initialProfile, onComplete }: Props) {
                       : "border-[var(--border)]"
                   }`}
                 >
-                  <p className="text-sm font-semibold text-[var(--text)]">
-                    🏥 Managing health
+                  <p className="flex items-center gap-2 text-sm font-semibold text-[var(--text)]">
+                    <HeartIcon className="h-4 w-4" />
+                    Managing health
                   </p>
                   <p className="mt-1 text-xs text-[var(--gray)]">
                     I want to eat better for my wellbeing.
@@ -564,8 +558,9 @@ export function OnboardingModal({ initialProfile, onComplete }: Props) {
                       : "border-[var(--border)]"
                   }`}
                 >
-                  <p className="text-sm font-semibold text-[var(--text)]">
-                    👨‍👩‍👧 Feeding a family
+                  <p className="flex items-center gap-2 text-sm font-semibold text-[var(--text)]">
+                    <UserIcon className="h-4 w-4" />
+                    Feeding a family
                   </p>
                   <p className="mt-1 text-xs text-[var(--gray)]">
                     I need practical meals for multiple people.
@@ -595,7 +590,9 @@ export function OnboardingModal({ initialProfile, onComplete }: Props) {
                   }`}
                   onClick={() => selectDietStyle(null)}
                 >
-                  🍽️ No restriction
+                  <IconLabel icon={<UtensilsCrossed className="h-3.5 w-3.5" aria-hidden />}>
+                    No restriction
+                  </IconLabel>
                 </button>
                 {dietaryStyles.map((d) => (
                   <button
@@ -786,6 +783,7 @@ export function OnboardingModal({ initialProfile, onComplete }: Props) {
           </button>
         </div>
       </section>
+      </div>
     </main>
   );
 }

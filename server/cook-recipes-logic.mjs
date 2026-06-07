@@ -89,13 +89,26 @@ export async function runCookRecipes(body) {
     dietRules.push("No meat or poultry; fish and seafood are allowed.");
   }
 
+  const count =
+    typeof body.count === "number" && Number.isFinite(body.count)
+      ? Math.min(6, Math.max(1, Math.round(body.count)))
+      : 4;
+  const excludeTitles = Array.isArray(body.excludeTitles)
+    ? body.excludeTitles.filter((x) => typeof x === "string" && x.trim()).map((s) => s.trim())
+    : [];
+
+  const excludeRule =
+    excludeTitles.length > 0
+      ? `- Do NOT reuse these titles (already suggested): ${JSON.stringify(excludeTitles)}`
+      : "";
+
   const prompt = `You suggest practical home recipes. Output ONLY valid JSON (no markdown).
 
 Schema:
 {"recipes":[{"title":"string","description":"string (2-4 sentences)","cookTime":"string like \\"25 mins\\"","difficulty":"Easy"|"Medium"|"Hard","matchedIngredients":["strings from user list actually used"],"missingOptionalIngredients":["extras that would help but aren't required"],"calories":number,"protein":number,"carbs":number,"fat":number,"allergyWarning":"string; empty string if none","goalReason":"one sentence why this fits the user's goal","steps":["4-7 short imperative cooking steps"]}]}
 
 Rules:
-- Return exactly 3 to 5 recipes in "recipes".
+- Return exactly ${count} recipes in "recipes".
 - Each recipe must primarily use ingredients from the user's list; matchedIngredients must be a subset of those ingredient strings (case-insensitive OK but copy wording from list when possible).
 - Respect dietary preference: ${dietaryPreference}.
 ${dietRules.length ? `- ${dietRules.join("\n- ")}` : ""}
@@ -104,6 +117,7 @@ ${dietRules.length ? `- ${dietRules.join("\n- ")}` : ""}
 - Dietary restrictions: ${restrictionLine}
 - Numbers for calories and macros should be realistic per serving for one main portion.
 - Titles must be unique.
+${excludeRule}
 
 User ingredients (JSON array): ${JSON.stringify(ingredients)}`;
 
@@ -117,7 +131,7 @@ User ingredients (JSON array): ${JSON.stringify(ingredients)}`;
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",
-        max_tokens: 4096,
+        max_tokens: count <= 2 ? 1800 : 3200,
         temperature: 0.65,
         response_format: { type: "json_object" },
         messages: [{ role: "user", content: prompt }],

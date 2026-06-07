@@ -1,5 +1,5 @@
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   appendManualMealToDailyLog,
   formatLocalDate,
@@ -15,6 +15,23 @@ import { getSafeMeals, getHeroIngredient, getDailyMeal } from "@/lib/mealFilter"
 import type { Meal } from "@/lib/mealLibrary";
 import type { UserProfile } from "@/types";
 import { useToast } from "./Toast";
+import {
+  AlertIcon,
+  CameraIcon,
+  ClipboardListIcon,
+  DropletsIcon,
+  FlameIcon,
+  IconLabel,
+  MacroStatGrid,
+  MoonIcon,
+  PencilIcon,
+  RefreshCwIcon,
+  SunIcon,
+  SunriseIcon,
+  TargetIcon,
+  ZapIcon,
+} from "@/components/icons/AppIcons";
+import { Sprout } from "lucide-react";
 
 /** Stable day-of-year seed so the same meals show all day, different tomorrow. */
 function todayDayIndex(): number {
@@ -51,10 +68,10 @@ function TodayMealCard({
     userAllergens.map((u) => u.toLowerCase()).includes(a.toLowerCase())
   );
 
-  const MEAL_EMOJI: Record<string, string> = {
-    Breakfast: "🌅",
-    Lunch: "☀️",
-    Dinner: "🌙",
+  const MEAL_ICON: Record<string, ReactNode> = {
+    Breakfast: <SunriseIcon className="h-3.5 w-3.5" />,
+    Lunch: <SunIcon className="h-3.5 w-3.5" />,
+    Dinner: <MoonIcon className="h-3.5 w-3.5" />,
   };
 
   return (
@@ -62,8 +79,9 @@ function TodayMealCard({
       {/* Header row — always visible */}
       <div className="flex items-center justify-between gap-2 p-4">
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--gray)]">
-            {MEAL_EMOJI[mealType]} {mealType}
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--gray)]">
+            {MEAL_ICON[mealType]}
+            {mealType}
           </p>
           <p className="mt-0.5 truncate font-playfair text-lg text-[var(--text)]">{meal.name}</p>
           <p className="mt-0.5 text-[11px] text-[var(--gray)]">
@@ -79,14 +97,15 @@ function TodayMealCard({
             title="Try another meal"
             className="rounded-full border border-[var(--border)] px-2 py-1 text-[11px] text-[var(--gray)] hover:border-[var(--green)] hover:text-[var(--green)]"
           >
-            🔄
+            <RefreshCwIcon className="h-3.5 w-3.5" aria-hidden />
           </button>
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
             className="flex items-center gap-1 rounded-full border border-[var(--green)] bg-[var(--green-pale)] px-2.5 py-1 text-[11px] font-semibold text-[var(--green)]"
           >
-            📋 {expanded ? "Hide" : "Steps"} {expanded ? "▴" : "▾"}
+            <ClipboardListIcon className="h-3.5 w-3.5" />
+            {expanded ? "Hide" : "Steps"} {expanded ? "▴" : "▾"}
           </button>
         </div>
       </div>
@@ -97,7 +116,7 @@ function TodayMealCard({
           {/* Hero + tags */}
           <div className="flex flex-wrap items-center gap-2 mb-3">
             <span className="flex items-center gap-1 rounded-full bg-[var(--green)] px-3 py-1 text-[11px] font-semibold text-white">
-              🥩 {hero}
+              {hero}
             </span>
             {meal.tags.map((t) => (
               <span
@@ -110,24 +129,13 @@ function TodayMealCard({
           </div>
 
           {/* Macro row */}
-          <div className="mb-3 grid grid-cols-4 gap-2 rounded-2xl bg-[var(--cream)] p-3">
-            <div className="text-center">
-              <p className="text-base font-bold text-[var(--text)]">{meal.calories}</p>
-              <p className="text-[10px] text-[var(--gray)]">🔥 kcal</p>
-            </div>
-            <div className="text-center">
-              <p className="text-base font-bold text-[var(--green)]">{meal.protein_g}g</p>
-              <p className="text-[10px] text-[var(--gray)]">💪 protein</p>
-            </div>
-            <div className="text-center">
-              <p className="text-base font-bold text-[var(--text)]">{meal.carbs_g}g</p>
-              <p className="text-[10px] text-[var(--gray)]">🍞 carbs</p>
-            </div>
-            <div className="text-center">
-              <p className="text-base font-bold text-[var(--text)]">{meal.fat_g}g</p>
-              <p className="text-[10px] text-[var(--gray)]">🥑 fat</p>
-            </div>
-          </div>
+          <MacroStatGrid
+            calories={meal.calories}
+            protein={meal.protein_g}
+            carbs={meal.carbs_g}
+            fat={meal.fat_g}
+            className="mb-3"
+          />
 
           {/* Allergen */}
           {meal.allergens.length > 0 ? (
@@ -136,7 +144,9 @@ function TodayMealCard({
                 flagged ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700"
               }`}
             >
-              ⚠️ Contains: {meal.allergens.join(", ")} — check labels before cooking
+              <IconLabel icon={<AlertIcon className="h-3.5 w-3.5" />}>
+                Contains: {meal.allergens.join(", ")} — check labels before cooking
+              </IconLabel>
               {flagged && (
                 <div className="mt-0.5 font-semibold text-red-700">
                   This dish may not be safe for your dietary profile
@@ -195,10 +205,10 @@ function capitalizeName(raw: string): string {
 }
 
 function waterMotivation(filledCount: number): string {
-  if (filledCount <= 2) return "Stay hydrated! Start drinking 💧";
-  if (filledCount <= 5) return "Good progress! Keep going 👍";
-  if (filledCount <= 7) return "Almost there! One more 💪";
-  return "Hydration goal hit! 🎉";
+  if (filledCount <= 2) return "Stay hydrated! Start drinking.";
+  if (filledCount <= 5) return "Good progress! Keep going.";
+  if (filledCount <= 7) return "Almost there! One more glass.";
+  return "Hydration goal hit!";
 }
 
 function compareYmd(a: string, b: string): number {
@@ -527,7 +537,7 @@ export function DashboardScreen({
   useEffect(() => {
     if (filledGlasses === 8) {
       setWaterCelebrate(true);
-      showToast("💧 Hydration goal reached! Great job!", "success");
+      showToast("Hydration goal reached! Great job!", "success");
       const id = window.setTimeout(() => setWaterCelebrate(false), 1200);
       return () => window.clearTimeout(id);
     }
@@ -562,25 +572,12 @@ export function DashboardScreen({
     <>
     {present ? (
     <div
-      className={`fixed inset-0 z-[56] overflow-hidden transition-[visibility] duration-300 ${
-        entered ? "visible" : "invisible"
+      className={`screen-overlay z-[56] flex flex-col bg-[var(--cream)] transition-opacity duration-300 ${
+        entered ? "opacity-100" : "opacity-0 pointer-events-none"
       }`}
       aria-hidden={!open && !entered}
     >
-      <div
-        className={`absolute inset-0 bg-black/20 transition-opacity duration-300 ${
-          entered ? "opacity-100" : "opacity-0"
-        }`}
-        aria-hidden
-        onClick={onClose}
-      />
-      <div
-        className={`absolute inset-y-0 right-0 flex w-full max-w-[430px] flex-col bg-[var(--cream)] shadow-[-12px_0_40px_rgba(0,0,0,0.15)] transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
-          entered ? "translate-x-0" : "translate-x-full"
-        }`}
-        style={{ paddingTop: "env(safe-area-inset-top)" }}
-      >
-      <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-[var(--border)] bg-[var(--cream)]/95 px-3 py-2 backdrop-blur-md">
+      <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-[var(--border)] bg-[var(--cream)]/95 px-2 py-2 backdrop-blur-md sm:px-3">
         <button
           type="button"
           onClick={onClose}
@@ -602,33 +599,38 @@ export function DashboardScreen({
           </svg>
           {backLabel}
         </button>
-        <p className="pointer-events-none absolute left-1/2 -translate-x-1/2 font-playfair text-lg text-[var(--green)]">
+        <p className="pointer-events-none absolute left-1/2 max-w-[45%] -translate-x-1/2 truncate text-center font-playfair text-lg text-[var(--green)]">
           Dashboard
         </p>
-        <span className="w-[72px]" aria-hidden />
+        <span className="min-w-[72px] shrink-0" aria-hidden />
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-      <main className="mx-auto w-full max-w-[430px] px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] pt-2">
-      <section className="w-full">
-        <div className="relative rounded-3xl bg-gradient-to-r from-[var(--green)] to-[var(--green-light)] p-5 text-[var(--cream)]">
-          <div className="flex flex-wrap items-center justify-between gap-3 ">
-            <div className="flex min-w-0 flex-1 items-center gap-4">
-              {profile.avatarDataUri ? (
-                <img
-                  src={profile.avatarDataUri}
-                  alt=""
-                  className="h-16 w-16 shrink-0 rounded-full border-2 border-white/40 object-cover shadow-md"
-                />
-              ) : null}
-              <div className="min-w-0">
-                <h1 className="font-playfair text-2xl">
-                  {greeting} {displayName} 👋
-                </h1>
-                <p className="mt-1 text-sm text-[var(--cream)]/90">Daily target: {plan.tdee} kcal</p>
-                <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                  <span className="rounded-full bg-white/20 px-3 py-1">🎯 {goalLabel}</span>
-                  <span className="rounded-full bg-white/20 px-3 py-1">🏃 {activityLabel}</span>
-                </div>
+      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
+      <main className="app-shell w-full px-4 pb-6 pt-2">
+      <section className="w-full min-w-0">
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[var(--green)] to-[var(--green-light)] p-4 text-[var(--cream)] sm:p-5">
+          <div className="flex min-w-0 items-start gap-3 sm:gap-4">
+            {profile.avatarDataUri ? (
+              <img
+                src={profile.avatarDataUri}
+                alt=""
+                className="h-14 w-14 shrink-0 rounded-full border-2 border-white/40 object-cover shadow-md sm:h-16 sm:w-16"
+              />
+            ) : null}
+            <div className="min-w-0 flex-1">
+              <h1 className="text-wrap-safe font-playfair text-xl leading-snug sm:text-2xl">
+                {greeting}, {displayName}
+              </h1>
+              <p className="mt-1 text-sm text-[var(--cream)]/90">
+                Daily target: {plan.tdee.toLocaleString()} kcal
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-white/20 px-3 py-1">
+                  <TargetIcon className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{goalLabel}</span>
+                </span>
+                <span className="max-w-full truncate rounded-full bg-white/20 px-3 py-1">
+                  {activityLabel}
+                </span>
               </div>
             </div>
           </div>
@@ -727,27 +729,28 @@ export function DashboardScreen({
             <h3 className="text-sm font-semibold uppercase tracking-[0.1em] text-[var(--gray)]">
               Today&apos;s meals logged
             </h3>
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                onClick={goCook}
+                className="flex min-h-[48px] flex-1 items-center justify-center rounded-full bg-[var(--green)] px-4 py-3 text-sm font-semibold text-white shadow-sm active:opacity-90"
+              >
+                <IconLabel icon={<CameraIcon className="h-4 w-4" />}>Scan Fridge</IconLabel>
+              </button>
+              <button
+                type="button"
+                onClick={() => setManualModalOpen(true)}
+                className="flex min-h-[48px] flex-1 items-center justify-center rounded-full border-2 border-[var(--green)] bg-[var(--white)] px-4 py-3 text-sm font-semibold text-[var(--green)] active:opacity-90"
+              >
+                <IconLabel icon={<PencilIcon className="h-4 w-4" />}>Log manually</IconLabel>
+              </button>
+            </div>
             {sortedEntries.length === 0 ? (
-              <div className="mt-4 space-y-3">
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <button
-                    type="button"
-                    onClick={goCook}
-                    className="flex-1 rounded-full bg-[var(--green)] px-4 py-3 text-sm font-semibold text-white"
-                  >
-                    📸 Scan Fridge
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setManualModalOpen(true)}
-                    className="flex-1 rounded-full border-2 border-[var(--green)] bg-white px-4 py-3 text-sm font-semibold text-[var(--green)]"
-                  >
-                    ✏️ Log manually
-                  </button>
-                </div>
-              </div>
+              <p className="mt-3 text-center text-sm text-[var(--gray)]">
+                No meals logged yet today — scan your fridge or log one manually.
+              </p>
             ) : (
-              <ul className="mt-3 space-y-2">
+              <ul className="mt-4 space-y-2">
                 {sortedEntries.map((entry) => (
                   <LoggedMealRow
                     key={entry.id}
@@ -769,15 +772,24 @@ export function DashboardScreen({
 
         {streak.count >= 1 ? (
           <div className="mt-4 rounded-3xl bg-gradient-to-br from-[#f97316] via-[#ea580c] to-[#c2410c] p-5 text-white shadow-md">
-            <p className="text-3xl font-bold leading-tight">🔥 {streak.count} Day Streak</p>
+            <p className="flex items-center gap-2 text-3xl font-bold leading-tight">
+              <FlameIcon className="h-8 w-8" />
+              {streak.count} Day Streak
+            </p>
             <p className="mt-2 text-sm text-white/90">Log meals daily to keep it going</p>
-            <p className="mt-4 text-sm font-medium text-white/95">⚡ Best streak: {streak.best} days</p>
+            <p className="mt-4 flex items-center gap-1.5 text-sm font-medium text-white/95">
+              <ZapIcon className="h-4 w-4" />
+              Best streak: {streak.best} days
+            </p>
           </div>
         ) : (
           <div className="mt-4 rounded-3xl border border-[var(--border)] bg-[var(--cream)] p-5 shadow-sm">
-            <p className="font-playfair text-xl text-[var(--green)]">🌱 Start your streak today</p>
+            <p className="flex items-center gap-2 font-playfair text-xl text-[var(--green)]">
+              <Sprout className="h-5 w-5" aria-hidden />
+              Start your streak today
+            </p>
             <p className="mt-2 text-sm text-[var(--gray)]">
-              Log your first meal from the Cook tab or use Log manually below.
+              Use Scan Fridge or Log manually above to log your first meal today.
             </p>
           </div>
         )}
@@ -858,7 +870,10 @@ export function DashboardScreen({
 
       <section className="w-full pt-4">
         <div className="rounded-2xl border border-[var(--border)] bg-[var(--white)] p-4">
-          <h3 className="font-playfair text-lg text-[var(--green)]">💧 Water intake</h3>
+          <h3 className="flex items-center gap-2 font-playfair text-lg text-[var(--green)]">
+            <DropletsIcon className="h-5 w-5" />
+            Water intake
+          </h3>
           <div className="mt-4 grid grid-cols-8 gap-2">
             {water.map((isFilled, idx) => (
               <button
@@ -906,16 +921,17 @@ export function DashboardScreen({
                     aria-hidden
                   />
                 ) : null}
-                <span className={isFilled ? "opacity-100" : "opacity-30"} aria-hidden>
-                  💧
-                </span>
+                <DropletsIcon
+                  className={`h-4 w-4 ${isFilled ? "text-white" : "text-sky-500 opacity-30"}`}
+                  aria-hidden
+                />
                 {waterDropBurst[idx] != null ? (
                   <span
-                    className="pointer-events-none absolute -top-2 text-[11px]"
+                    className="pointer-events-none absolute -top-2 text-[var(--green)]"
                     style={{ animation: "waterDropFloat 0.6s ease-out forwards" }}
                     aria-hidden
                   >
-                    💧
+                    <DropletsIcon className="h-3 w-3" />
                   </span>
                 ) : null}
               </button>
@@ -931,7 +947,7 @@ export function DashboardScreen({
 
       {manualModalOpen ? (
         <div
-          className="absolute inset-0 z-30 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+          className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 p-4 sm:items-center"
           role="dialog"
           aria-modal
           onClick={() => setManualModalOpen(false)}
@@ -1009,7 +1025,6 @@ export function DashboardScreen({
           </div>
         </div>
       ) : null}
-      </div>
     </div>
     ) : null}
     </>

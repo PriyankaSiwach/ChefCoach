@@ -1,5 +1,5 @@
-
 import { useMemo, useState } from "react";
+import { UserIcon } from "@/components/icons/AppIcons";
 import { clearRecipifyLocalSession } from "@/lib/session";
 import type { UserProfile } from "@/types";
 import { ProfileSettingsPanel } from "./ProfileSettingsPanel";
@@ -68,8 +68,8 @@ export function ProfileTab({
     : undefined;
 
   return (
-    <main className="min-h-full bg-[var(--cream)] pb-4">
-      <div className="mx-auto w-full max-w-[430px] px-4 pt-5">
+    <main className="tab-page min-h-full w-full max-w-[100vw] overflow-x-clip bg-[var(--cream)]">
+      <div className="app-shell px-4 pt-5">
         {/* Account header */}
         <header className="flex items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--white)] p-4 shadow-sm">
           {profile.avatarDataUri ? (
@@ -80,14 +80,16 @@ export function ProfileTab({
             />
           ) : (
             <div
-              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[var(--green-pale)] text-2xl"
+              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[var(--green-pale)] text-[var(--green)]"
               aria-hidden
             >
-              👤
+              <UserIcon className="h-7 w-7" />
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <h1 className="truncate font-playfair text-xl text-[var(--green)]">{displayName}</h1>
+            <h1 className="text-wrap-safe line-clamp-2 font-playfair text-xl leading-snug text-[var(--green)]">
+              {displayName}
+            </h1>
             {userEmail ? (
               <p className="truncate text-sm text-[var(--gray)]">{userEmail}</p>
             ) : (

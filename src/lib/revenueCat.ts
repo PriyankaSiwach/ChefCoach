@@ -1,9 +1,13 @@
 import { Capacitor } from "@capacitor/core";
-import type { CustomerInfo } from "@revenuecat/purchases-capacitor";
+import type { CustomerInfo, PurchasesPackage } from "@revenuecat/purchases-capacitor";
 
 // Public iOS API key — safe to embed in the client bundle (RevenueCat design).
 const RC_IOS_API_KEY = "appl_zWISHeIgOcePXOIWgZObpgvCzdY";
 const ENTITLEMENT_ID = "pro";
+
+/** Must match App Store Connect + RevenueCat dashboard exactly. */
+export const PRODUCT_MONTHLY = "com.chefcoach.pro.monthly";
+export const PRODUCT_YEARLY = "com.chefcoach.pro.yearly";
 
 type PurchasesModule = typeof import("@revenuecat/purchases-capacitor");
 type RevenueCatUIModule = typeof import("@revenuecat/purchases-capacitor-ui");
@@ -11,6 +15,20 @@ type RevenueCatUIModule = typeof import("@revenuecat/purchases-capacitor-ui");
 let purchasesMod: PurchasesModule | null = null;
 let uiMod: RevenueCatUIModule | null = null;
 let configured = false;
+
+export type OfferingsState = {
+  available: boolean;
+  monthlyPackage: PurchasesPackage | null;
+  yearlyPackage: PurchasesPackage | null;
+  warning: string | null;
+};
+
+const EMPTY_OFFERINGS: OfferingsState = {
+  available: false,
+  monthlyPackage: null,
+  yearlyPackage: null,
+  warning: null,
+};
 
 /** RevenueCat entitlement id (e.g. `pro`) — matches dashboard & `customerInfo.entitlements.active[id]`. */
 export function getRevenueCatEntitlementId(): string {
@@ -22,6 +40,14 @@ export function isRevenueCatPurchasePlatform(): boolean {
   return p === "ios" || p === "android";
 }
 
+function logRevenueCatWarning(message: string, detail?: unknown): void {
+  if (detail !== undefined) {
+    console.warn(`[RevenueCat] ${message}`, detail);
+  } else {
+    console.warn(`[RevenueCat] ${message}`);
+  }
+}
+
 /** Lazy-load native SDK — never imported on web so localhost dev stays stable. */
 async function getPurchases(): Promise<PurchasesModule | null> {
   if (!isRevenueCatPurchasePlatform()) return null;
@@ -29,7 +55,7 @@ async function getPurchases(): Promise<PurchasesModule | null> {
     try {
       purchasesMod = await import("@revenuecat/purchases-capacitor");
     } catch (e) {
-      console.warn("[RevenueCat] Purchases SDK unavailable:", e);
+      logRevenueCatWarning("Purchases SDK unavailable", e);
       return null;
     }
   }
@@ -42,7 +68,7 @@ async function getRevenueCatUI(): Promise<RevenueCatUIModule | null> {
     try {
       uiMod = await import("@revenuecat/purchases-capacitor-ui");
     } catch (e) {
-      console.warn("[RevenueCat] Paywall UI unavailable:", e);
+      logRevenueCatWarning("Paywall UI unavailable", e);
       return null;
     }
   }
@@ -52,34 +78,17 @@ async function getRevenueCatUI(): Promise<RevenueCatUIModule | null> {
 function apiKeyForPlatform(): string | null {
   const p = Capacitor.getPlatform();
   if (p === "ios") {
-    // Env var overrides the hardcoded key (useful for switching environments)
-    return (import.meta.env.VITE_REVENUECAT_IOS_API_KEY as string | undefined)?.trim()
-      || RC_IOS_API_KEY;
+    return (
+      (import.meta.env.VITE_REVENUECAT_IOS_API_KEY as string | undefined)?.trim() ||
+      RC_IOS_API_KEY
+    );
   }
   if (p === "android") {
-    return (import.meta.env.VITE_REVENUECAT_ANDROID_API_KEY as string | undefined)?.trim() || null;
+    return (
+      (import.meta.env.VITE_REVENUECAT_ANDROID_API_KEY as string | undefined)?.trim() || null
+    );
   }
   return null;
-}
-
-export async function initializeRevenueCatSdkOnLaunch(): Promise<void> {
-  if (!isRevenueCatPurchasePlatform()) return;
-  const apiKey = apiKeyForPlatform();
-  if (!apiKey) return;
-  try {
-    const mod = await getPurchases();
-    if (!mod) return;
-    const { Purchases, LOG_LEVEL } = mod;
-    if (import.meta.env.DEV) {
-      await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
-    }
-    if (!configured) {
-      await Purchases.configure({ apiKey });
-      configured = true;
-    }
-  } catch {
-    /* ignore */
-  }
 }
 
 /** True if the configured entitlement is in `entitlements.active`. */
@@ -103,7 +112,11 @@ export function applyProFromCustomerInfo(customerInfo: CustomerInfo): void {
   }
 }
 
-async function ensurePurchasesReady(appUserId: string | null): Promise<boolean> {
+/**
+ * Configure RevenueCat lazily — only when user opens paywall / taps Subscribe / Restore.
+ * Never call on app launch or photo picker flows.
+ */
+export async function ensurePurchasesReady(appUserId: string | null): Promise<boolean> {
   if (!isRevenueCatPurchasePlatform()) return false;
   const apiKey = apiKeyForPlatform();
   if (!apiKey) return false;
@@ -112,41 +125,128 @@ async function ensurePurchasesReady(appUserId: string | null): Promise<boolean> 
   if (!mod) return false;
   const { Purchases } = mod;
 
-  if (!configured) {
-    await Purchases.configure({
-      apiKey,
-      appUserID: appUserId ?? undefined,
-    });
-    configured = true;
-  } else if (appUserId) {
-    const { customerInfo } = await Purchases.logIn({ appUserID: appUserId });
-    applyProFromCustomerInfo(customerInfo);
+  try {
+    if (!configured) {
+      if (import.meta.env.DEV) {
+        const { LOG_LEVEL } = mod;
+        await Purchases.setLogLevel({ level: LOG_LEVEL.WARN });
+      }
+      await Purchases.configure({
+        apiKey,
+        appUserID: appUserId ?? undefined,
+      });
+      configured = true;
+    } else if (appUserId) {
+      const { customerInfo } = await Purchases.logIn({ appUserID: appUserId });
+      applyProFromCustomerInfo(customerInfo);
+    }
+    return true;
+  } catch (e) {
+    logRevenueCatWarning("SDK configure failed (non-fatal)", e);
+    return false;
   }
-  return true;
 }
 
-export async function syncRevenueCatUser(appUserId: string | null): Promise<void> {
-  const ok = await ensurePurchasesReady(appUserId);
-  if (!ok) return;
+function offeringsWarningMessage(reason: string): string {
+  if (import.meta.env.DEV) {
+    return `${reason} Simulator/dev builds cannot load real App Store products — use a physical device with ${PRODUCT_MONTHLY} and ${PRODUCT_YEARLY} configured in App Store Connect and RevenueCat.`;
+  }
+  return `${reason} Please try again in a moment.`;
+}
+
+/**
+ * Fetch RevenueCat offerings when user opens paywall. Never throws — logs warning only.
+ */
+export async function fetchOfferingsSafe(appUserId: string | null): Promise<OfferingsState> {
+  if (!isRevenueCatPurchasePlatform()) {
+    return {
+      ...EMPTY_OFFERINGS,
+      warning: "Subscribe in the ChefCoach iOS app with your Apple ID to unlock Pro.",
+    };
+  }
+
+  const ready = await ensurePurchasesReady(appUserId);
+  if (!ready) {
+    return {
+      ...EMPTY_OFFERINGS,
+      warning: offeringsWarningMessage("Subscription SDK is not available."),
+    };
+  }
+
   try {
     const mod = await getPurchases();
-    if (!mod) return;
-    const { customerInfo } = await mod.Purchases.getCustomerInfo();
-    applyProFromCustomerInfo(customerInfo);
-  } catch {
-    /* ignore */
+    if (!mod) {
+      return {
+        ...EMPTY_OFFERINGS,
+        warning: offeringsWarningMessage("Subscription SDK is not available."),
+      };
+    }
+
+    const { Purchases } = mod;
+    const { current } = await Purchases.getOfferings();
+
+    if (!current?.availablePackages?.length) {
+      logRevenueCatWarning(
+        "No offerings available. Verify products in App Store Connect + RevenueCat:",
+        { monthly: PRODUCT_MONTHLY, yearly: PRODUCT_YEARLY }
+      );
+      return {
+        ...EMPTY_OFFERINGS,
+        warning: offeringsWarningMessage(
+          "Subscription plans are not available yet."
+        ),
+      };
+    }
+
+    const monthlyPackage =
+      current.availablePackages.find((p) => p.product.identifier === PRODUCT_MONTHLY) ??
+      null;
+    const yearlyPackage =
+      current.availablePackages.find((p) => p.product.identifier === PRODUCT_YEARLY) ??
+      null;
+
+    if (!monthlyPackage && !yearlyPackage) {
+      logRevenueCatWarning(
+        "Products missing from current offering. Expected IDs:",
+        { monthly: PRODUCT_MONTHLY, yearly: PRODUCT_YEARLY, found: current.availablePackages.map((p) => p.product.identifier) }
+      );
+      return {
+        ...EMPTY_OFFERINGS,
+        warning: offeringsWarningMessage(
+          `Products ${PRODUCT_MONTHLY} and ${PRODUCT_YEARLY} were not found in RevenueCat offerings.`
+        ),
+      };
+    }
+
+    return {
+      available: true,
+      monthlyPackage,
+      yearlyPackage,
+      warning: null,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    logRevenueCatWarning("Error fetching offerings (non-fatal)", msg);
+    return {
+      ...EMPTY_OFFERINGS,
+      warning: offeringsWarningMessage(
+        msg.includes("App Store Connect")
+          ? "App Store products could not be loaded."
+          : "Could not load subscription plans."
+      ),
+    };
   }
 }
 
-export async function refreshProFromRevenueCat(): Promise<void> {
+export async function refreshProFromRevenueCat(_appUserId?: string | null): Promise<void> {
   if (!configured) return;
   try {
     const mod = await getPurchases();
     if (!mod) return;
     const { customerInfo } = await mod.Purchases.getCustomerInfo();
     applyProFromCustomerInfo(customerInfo);
-  } catch {
-    /* ignore */
+  } catch (e) {
+    logRevenueCatWarning("refreshProFromRevenueCat failed (non-fatal)", e);
   }
 }
 
@@ -157,8 +257,8 @@ export async function revenueCatLogOut(): Promise<void> {
     if (!mod) return;
     const { customerInfo } = await mod.Purchases.logOut();
     applyProFromCustomerInfo(customerInfo);
-  } catch {
-    /* ignore */
+  } catch (e) {
+    logRevenueCatWarning("logOut failed (non-fatal)", e);
   } finally {
     configured = false;
   }
@@ -184,7 +284,8 @@ export async function restorePurchases(appUserId: string | null): Promise<Purcha
     }
     return {
       ok: false,
-      error: "No active subscription found to restore. If you subscribed, make sure you're signed in with the same Apple ID.",
+      error:
+        "No active subscription found to restore. If you subscribed, make sure you're signed in with the same Apple ID.",
     };
   } catch (e: unknown) {
     const err = e as { message?: string };
@@ -205,6 +306,14 @@ export async function presentRevenueCatPaywall(appUserId: string | null): Promis
   }
 
   try {
+    const offerings = await fetchOfferingsSafe(appUserId);
+    if (!offerings.available) {
+      return {
+        ok: false,
+        error: offerings.warning ?? "Subscription plans are not available right now.",
+      };
+    }
+
     await ensurePurchasesReady(appUserId);
 
     const ui = await getRevenueCatUI();

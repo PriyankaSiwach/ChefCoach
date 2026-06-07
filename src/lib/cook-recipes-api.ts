@@ -1,154 +1,151 @@
 import type { DietFilter, RecipeResultItem, TimeFilter, UserGoal, UserProfile } from "@/types";
+import { Capacitor } from "@capacitor/core";
 import { apiUrl } from "@/lib/apiBase";
 import { buildUserDietaryRestrictionsPrompt } from "@/lib/dietConstants";
+import { matchRecipesFromIngredients } from "@/lib/fridge-recipe-match";
+import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
+import {
+  mapCookRecipeToResultItem,
+  type CookRecipeRaw,
+} from "@/lib/cook-recipe-mapper";
 
-type CookRecipeRaw = {
-  title?: unknown;
-  description?: unknown;
-  cookTime?: unknown;
-  difficulty?: unknown;
-  matchedIngredients?: unknown;
-  missingOptionalIngredients?: unknown;
-  calories?: unknown;
-  protein?: unknown;
-  carbs?: unknown;
-  fat?: unknown;
-  allergyWarning?: unknown;
-  goalReason?: unknown;
-  steps?: unknown;
-};
+export { mapCookRecipeToResultItem } from "@/lib/cook-recipe-mapper";
 
 type CookRecipesResponse = {
   recipes?: CookRecipeRaw[];
   error?: string;
 };
 
-function num(v: unknown, fallback = 0): number {
-  const n = typeof v === "number" ? v : typeof v === "string" ? parseFloat(v) : NaN;
-  return Number.isFinite(n) ? Math.round(n) : fallback;
-}
-
-function str(v: unknown): string {
-  return typeof v === "string" ? v.trim() : "";
-}
-
-function normalizeDifficulty(v: unknown): "Easy" | "Medium" | "Hard" {
-  const s = str(v).toLowerCase();
-  if (s.includes("hard")) return "Hard";
-  if (s.includes("medium")) return "Medium";
-  return "Easy";
-}
-
-function stringArray(v: unknown): string[] {
-  if (!Array.isArray(v)) return [];
-  return v.filter((x): x is string => typeof x === "string" && x.trim().length > 0).map((s) => s.trim());
-}
-
-function deriveSteps(description: string): string[] {
-  const parts = description
-    .split(/(?<=[.!?])\s+/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 8);
-  if (parts.length >= 3) return parts.slice(0, 8);
-  return [
-    "Gather ingredients and prep as needed.",
-    "Cook according to the overview in the description, adjusting heat and timing for your stove.",
-    "Taste, adjust seasoning, and serve warm.",
-  ];
-}
-
-export function mapCookRecipeToResultItem(
-  raw: CookRecipeRaw,
-  dietLabel: DietFilter
-): RecipeResultItem | null {
-  const title = str(raw.title);
-  if (!title) return null;
-
-  const description = str(raw.description);
-  let cookTime = str(raw.cookTime);
-  if (!cookTime) cookTime = "30 mins";
-
-  const stepsRaw = stringArray(raw.steps);
-  const steps = stepsRaw.length ? stepsRaw : deriveSteps(description || title);
-
-  const matched = stringArray(raw.matchedIngredients);
-  const missing = stringArray(raw.missingOptionalIngredients);
-  const allergyWarning = str(raw.allergyWarning);
-  const goalReason = str(raw.goalReason);
-
-  const dietDisplay = dietLabel === "None" ? "Balanced" : dietLabel;
-
-  let desc = description;
-  if (goalReason) desc = desc ? `${desc}\n\nGoal fit: ${goalReason}` : `Goal fit: ${goalReason}`;
-  if (allergyWarning) desc = desc ? `${desc}\n\n⚠️ ${allergyWarning}` : `⚠️ ${allergyWarning}`;
-
-  return {
-    name: title,
-    cookTime,
-    diet: dietDisplay,
-    description: desc || title,
-    steps,
-    calories: num(raw.calories, 350),
-    protein_g: num(raw.protein, 20),
-    carbs_g: num(raw.carbs, 35),
-    fat_g: num(raw.fat, 14),
-    ingredientsUsed: matched,
-    missingOptionalIngredients: missing,
-    difficulty: normalizeDifficulty(raw.difficulty),
-    healthNote: [goalReason, allergyWarning].filter(Boolean).join(" · "),
-    substitutions: [],
-    ingredientMatchCount: matched.length,
-  };
-}
-
 export type FetchCookRecipesParams = {
   ingredients: string[];
   dietaryPreference: DietFilter;
   maxCookTime: TimeFilter;
   profile: UserProfile | null;
+  count?: number;
+  excludeTitles?: string[];
 };
 
-/**
- * @deprecated Cook tab uses `matchRecipesFromIngredients` (hardcoded library).
- * This API route calls OpenAI for recipe text — kept for optional server use only.
- */
-export async function fetchCookRecipesFromApi(
-  params: FetchCookRecipesParams
-): Promise<RecipeResultItem[]> {
-  const { ingredients, dietaryPreference, maxCookTime, profile } = params;
+function buildRequestBody(params: FetchCookRecipesParams) {
+  const { ingredients, dietaryPreference, maxCookTime, profile, count, excludeTitles } = params;
   const goal = (profile?.goal ?? "maintain_weight") as UserGoal;
   const allergies = (profile?.allergies ?? []).filter((a) => a !== "None");
   const dislikedFoods = (profile?.dislikedFoods ?? []).filter(Boolean);
   const dietaryRestrictionsPrompt = buildUserDietaryRestrictionsPrompt(profile);
 
-  const res = await fetch(apiUrl("/api/cook-recipes"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      ingredients,
-      dietaryPreference,
-      maxCookTime,
-      goal,
-      allergies,
-      dislikedFoods,
-      dietaryRestrictionsPrompt,
-    }),
-  });
+  return {
+    ingredients,
+    dietaryPreference,
+    maxCookTime,
+    goal,
+    allergies,
+    dislikedFoods,
+    dietaryRestrictionsPrompt,
+    count: count ?? 4,
+    excludeTitles: excludeTitles ?? [],
+  };
+}
 
-  const data = (await res.json()) as CookRecipesResponse;
-
-  if (!res.ok) {
-    throw new Error(data.error || "Could not generate recipes. Try again.");
-  }
-
-  const list = Array.isArray(data.recipes) ? data.recipes : [];
-  const mapped = list
+function mapRecipes(
+  list: CookRecipeRaw[],
+  dietaryPreference: DietFilter,
+  count: number,
+  excludeTitles: string[]
+): RecipeResultItem[] {
+  const excluded = new Set(excludeTitles.map((t) => t.toLowerCase()));
+  return list
     .map((r) => mapCookRecipeToResultItem(r, dietaryPreference))
-    .filter((x): x is RecipeResultItem => x !== null);
+    .filter((x): x is RecipeResultItem => x !== null)
+    .filter((r) => !excluded.has(r.name.toLowerCase()))
+    .slice(0, count);
+}
 
-  if (!mapped.length) {
-    throw new Error("No recipes returned. Try again.");
+async function tryServerCookRecipes(
+  params: FetchCookRecipesParams
+): Promise<RecipeResultItem[] | null> {
+  // iOS/Android always skip server — bundled app has no local API server
+  if (Capacitor.isNativePlatform()) {
+    return null;
   }
 
-  return mapped;
+  const count = Math.min(6, Math.max(1, params.count ?? 4));
+  const excludeTitles = params.excludeTitles ?? [];
+
+  try {
+    const res = await fetchWithTimeout(apiUrl("/api/cook-recipes"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildRequestBody(params)),
+      timeoutMs: 30_000,
+    });
+
+    const data = (await res.json()) as CookRecipesResponse;
+    if (!res.ok) {
+      console.warn("[cook-recipes] server error:", data.error ?? res.status);
+      return null;
+    }
+
+    const list = Array.isArray(data.recipes) ? data.recipes : [];
+    const mapped = mapRecipes(list, params.dietaryPreference, count, excludeTitles);
+    return mapped.length ? mapped : null;
+  } catch (e) {
+    console.warn("[cook-recipes] server fetch failed:", e);
+    return null;
+  }
+}
+
+async function tryClientCookRecipes(
+  params: FetchCookRecipesParams
+): Promise<RecipeResultItem[] | null> {
+  const apiKey = import.meta.env.VITE_OPENAI_API_KEY || "";
+  if (!apiKey) return null;
+
+  try {
+    const { generateCookRecipesFromOpenAI } = await import("@/lib/generate-cook-recipes");
+    const mapped = await generateCookRecipesFromOpenAI(params);
+    return mapped.length ? mapped : null;
+  } catch (e) {
+    console.warn("[cook-recipes] client OpenAI failed:", e);
+    return null;
+  }
+}
+
+function tryLocalCookRecipes(params: FetchCookRecipesParams): RecipeResultItem[] {
+  const count = Math.min(6, Math.max(1, params.count ?? 4));
+  const excludeTitles = params.excludeTitles ?? [];
+  const local = matchRecipesFromIngredients(params.ingredients, params.profile);
+  const excluded = new Set(excludeTitles.map((t) => t.toLowerCase()));
+  return local.filter((r) => !excluded.has(r.name.toLowerCase())).slice(0, count);
+}
+
+/**
+ * Generate cook-tab recipes: server (web dev) → client OpenAI → local library fallback.
+ * Never throws if local library can produce recipes.
+ */
+export async function fetchCookRecipesFromApi(
+  params: FetchCookRecipesParams
+): Promise<RecipeResultItem[]> {
+  const ingredients = params.ingredients.map((s) => s.trim()).filter(Boolean);
+  if (!ingredients.length) {
+    throw new Error("Add at least one ingredient before generating recipes.");
+  }
+
+  const withIngredients = { ...params, ingredients };
+
+  const fromServer = await tryServerCookRecipes(withIngredients);
+  if (fromServer?.length) {
+    return fromServer;
+  }
+
+  const fromClient = await tryClientCookRecipes(withIngredients);
+  if (fromClient?.length) {
+    return fromClient;
+  }
+
+  const fromLocal = tryLocalCookRecipes(withIngredients);
+
+  if (fromLocal.length) return fromLocal;
+
+  throw new Error(
+    "Could not generate recipes. Check your connection and try again."
+  );
 }

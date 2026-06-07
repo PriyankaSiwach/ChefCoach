@@ -10,9 +10,10 @@ import {
 import type { Session, User } from "@supabase/supabase-js";
 import type { AuthError } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
-import { pullProfileFromSupabase } from "@/lib/profileSupabase";
+import { pullProfileFromSupabase, ensureProBypassForUser } from "@/lib/profileSupabase";
+import { resolveAuthEmail } from "@/lib/trial";
 import { clearRecipifyLocalSession } from "@/lib/session";
-import { revenueCatLogOut, syncRevenueCatUser } from "@/lib/revenueCat";
+import { revenueCatLogOut } from "@/lib/revenueCat";
 import {
   isAccountExistsAuthError,
   signUpIndicatesExistingAccount,
@@ -47,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const syncEmailForLegacyApis = useCallback((s: Session | null) => {
     if (typeof window === "undefined") return;
     try {
-      const email = s?.user?.email;
+      const email = s?.user ? resolveAuthEmail(s.user) : null;
       if (email) window.localStorage.setItem("recipify_email", email);
       else window.localStorage.removeItem("recipify_email");
     } catch {
@@ -78,10 +79,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         void (async () => {
           try {
             if (s?.user?.id) {
-              await pullProfileFromSupabase(s.user.id);
-              await syncRevenueCatUser(s.user.id);
-            } else {
-              await syncRevenueCatUser(null);
+              const email = resolveAuthEmail(s.user);
+              await pullProfileFromSupabase(s.user.id, email);
+              await ensureProBypassForUser(s.user.id, email);
             }
           } catch (e) {
             console.warn("[Auth] Background sync failed:", e);
@@ -106,8 +106,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === "SIGNED_IN" && nextSession?.user?.id) {
         void (async () => {
           try {
-            await pullProfileFromSupabase(nextSession.user.id);
-            await syncRevenueCatUser(nextSession.user.id);
+            const email = resolveAuthEmail(nextSession.user);
+            await pullProfileFromSupabase(nextSession.user.id, email);
+            await ensureProBypassForUser(nextSession.user.id, email);
           } catch (e) {
             console.warn("[Auth] Post sign-in sync failed:", e);
           }

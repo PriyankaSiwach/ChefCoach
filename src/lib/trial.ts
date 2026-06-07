@@ -18,20 +18,43 @@ const KEY_SCANS_LEGACY = "recipify_trial_scans"; // old remaining-based key
 const KEY_ENDED_LEGACY = "recipify_trial_ended";
 const KEY_EMAIL = "recipify_email";
 
-/** Fridge-scan bypass email (dev owner). */
-const SCAN_BYPASS_EMAIL = "priyankasiwach214@gmail.com";
+/** Lifetime Pro — no paywall, no scan limit (synced to Supabase profile_data). */
+const PRO_BYPASS_EMAILS = [
+  "support@pstechnologiesinc.com",
+  "priyankasiwach214@gmail.com",
+] as const;
 
-// ─── Environment ──────────────────────────────────────────────────────────────
+type EmailCarrier = {
+  email?: string | null;
+  user_metadata?: Record<string, unknown> | null;
+};
 
-function isDevEnvironment(): boolean {
-  try {
-    if (import.meta.env?.DEV === true) return true;
-    if (import.meta.env?.MODE === "development") return true;
-  } catch { /* ignore */ }
-  try {
-    if (typeof process !== "undefined" && process.env?.NODE_ENV === "development") return true;
-  } catch { /* ignore */ }
-  return false;
+/** Best-effort login email from Supabase user + localStorage fallback. */
+export function resolveAuthEmail(user?: EmailCarrier | null): string | null {
+  const fromUser = user?.email?.trim();
+  if (fromUser) return fromUser;
+
+  const meta = user?.user_metadata ?? {};
+  for (const key of ["email", "preferred_email", "user_email"] as const) {
+    const v = meta[key];
+    if (typeof v === "string" && v.includes("@")) return v.trim();
+  }
+
+  return getStoredEmail()?.trim() ?? null;
+}
+
+export function isProBypassEmail(email?: string | null): boolean {
+  const candidates = new Set<string>();
+  const resolved = resolveAuthEmail(
+    email ? ({ email } satisfies EmailCarrier) : null
+  );
+  if (resolved) candidates.add(resolved.toLowerCase());
+  if (email?.trim()) candidates.add(email.trim().toLowerCase());
+  const stored = getStoredEmail()?.trim().toLowerCase();
+  if (stored) candidates.add(stored);
+
+  if (candidates.size === 0) return false;
+  return PRO_BYPASS_EMAILS.some((allowed) => candidates.has(allowed.toLowerCase()));
 }
 
 export function getStoredEmail(): string | null {
@@ -40,15 +63,11 @@ export function getStoredEmail(): string | null {
 }
 
 /**
- * When true: bypass the scan limit entirely.
- * Active in Vite dev mode OR for the bypass email.
+ * When true: unlimited scans + full Pro UI (no paywall).
+ * Matches {@link PRO_BYPASS_EMAILS} (session or stored login email).
  */
-export function isTrialScanBypassActive(_sessionEmail?: string | null): boolean {
-  // ALL BYPASSES TEMPORARILY DISABLED for UI testing — restore both lines below when done:
-  // if (isDevEnvironment()) return true;
-  // const email = (_sessionEmail?.trim() ?? getStoredEmail()?.trim() ?? "").toLowerCase();
-  // return email === SCAN_BYPASS_EMAIL.toLowerCase();
-  return false;
+export function isTrialScanBypassActive(sessionEmail?: string | null): boolean {
+  return isProBypassEmail(sessionEmail);
 }
 
 // ─── Local storage helpers ────────────────────────────────────────────────────
@@ -96,6 +115,7 @@ export function getTrialScansRemaining(): number {
 
 /** True when all free scans are used up. */
 export function isTrialExhausted(): boolean {
+  if (isTrialScanBypassActive()) return false;
   return getScansUsed() >= FREE_SCAN_LIMIT;
 }
 
@@ -114,6 +134,8 @@ export function getTrialEnded(): boolean {
  * Returns the new local scansUsed count.
  */
 export function recordScanUsed(userId?: string | null): number {
+  if (isTrialScanBypassActive()) return getScansUsed();
+
   const next = readLocalScansUsed() + 1;
   writeLocalScansUsed(next);
 

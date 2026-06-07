@@ -1,4 +1,5 @@
 import type { Recipe, RecipeResultItem, UserProfile } from "@/types";
+import { IconLabel, SparklesIcon, TrophyIcon } from "@/components/icons/AppIcons";
 import { IngredientsFound } from "./IngredientsFound";
 import { RecipeResults } from "./RecipeResults";
 import { TrialEndedBanner } from "./TrialEndedBanner";
@@ -30,6 +31,7 @@ function computeBestMatchRecipe(
 type Props = {
   error: string | null;
   loading: boolean;
+  loadingMessage?: string;
   ingredients: string[];
   hasUploadedPhoto: boolean;
   recipes: RecipeResultItem[];
@@ -41,6 +43,9 @@ type Props = {
   onRemoveIngredient: (ingredient: string) => void;
   onAddIngredient: (ingredient: string) => void;
   onGenerateRecipes: () => void;
+  onGenerateMore?: () => void;
+  loadingMore?: boolean;
+  canGenerateMore?: boolean;
   onLogMeal: (recipe: Recipe) => void;
   onReset: () => void;
   showTrialEndedBanner?: boolean;
@@ -51,6 +56,7 @@ type Props = {
 export function RecipeResultsSection({
   error,
   loading,
+  loadingMessage,
   ingredients,
   hasUploadedPhoto,
   recipes,
@@ -61,6 +67,9 @@ export function RecipeResultsSection({
   onRemoveIngredient,
   onAddIngredient,
   onGenerateRecipes,
+  onGenerateMore,
+  loadingMore = false,
+  canGenerateMore = false,
   onLogMeal,
   onReset,
   showTrialEndedBanner = false,
@@ -72,9 +81,9 @@ export function RecipeResultsSection({
   return (
     <>
       {error ? (
-        <div className="mx-auto mb-4 max-w-[600px] px-5">
+        <div className="app-shell mb-4 px-4">
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            ⚠️ {error}
+            {error}
           </div>
         </div>
       ) : null}
@@ -83,16 +92,17 @@ export function RecipeResultsSection({
         ingredients={ingredients}
         hasUploadedPhoto={hasUploadedPhoto}
         loading={loading}
+        loadingMessage={loadingMessage}
         onRemoveIngredient={onRemoveIngredient}
         onAddIngredient={onAddIngredient}
         onGenerateRecipes={onGenerateRecipes}
         userAllergens={(profile?.allergies ?? []).filter((a) => a !== "None")}
       />
 
-      <section className="mx-auto max-w-[600px] px-5 pb-24 md:pb-12">
+      <section className="app-shell px-4 pb-4">
         {matchedRecipePoolCount > 0 && recipes.length > 0 ? (
           <p className="mb-3 rounded-lg border border-[var(--green)]/30 bg-[var(--green-pale)]/60 px-3 py-2 text-xs text-[var(--green)]">
-            Recipes matched from your ingredients — ranked by how many items from your scan they use.
+            AI recipes tailored to your scanned ingredients — adjust diet and cook time filters above to refine results.
           </p>
         ) : null}
         {matchedRecipePoolCount > 0 && recipes.length === 0 && ingredients.length > 0 ? (
@@ -115,12 +125,12 @@ export function RecipeResultsSection({
         {bestMatch && recipes.length > 0 ? (
           <div className="mb-4 rounded-xl border border-[var(--green)]/25 bg-gradient-to-r from-[var(--green-pale)] to-[var(--cream)] px-4 py-3 shadow-sm">
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--green)]">
-              📊 Today&apos;s best pick for your goals:
+              Today&apos;s best pick for your goals:
             </p>
             <p className="mt-2 flex flex-wrap items-center gap-2 font-playfair text-lg text-[var(--text)]">
               {bestMatch.name}
-              <span className="rounded-full bg-[var(--green)] px-2.5 py-0.5 text-[10px] font-bold text-white">
-                Best Match 🏆
+              <span className="inline-flex items-center gap-1 rounded-full bg-[var(--green)] px-2.5 py-0.5 text-[10px] font-bold text-white">
+                <IconLabel icon={<TrophyIcon className="h-3 w-3" />}>Best Match</IconLabel>
               </span>
             </p>
           </div>
@@ -138,6 +148,20 @@ export function RecipeResultsSection({
           onUpgrade={onUpgrade}
           userAllergens={(profile?.allergies ?? []).filter((a) => a !== "None")}
         />
+        {canGenerateMore && onGenerateMore ? (
+          <div className="mt-4 flex justify-center">
+            <button
+              type="button"
+              onClick={onGenerateMore}
+              disabled={loadingMore || recipesLocked}
+              className="rounded-full border-2 border-[var(--green)] bg-[var(--green-pale)] px-6 py-3 text-sm font-semibold text-[var(--green)] transition hover:bg-[var(--green)] hover:text-white disabled:opacity-60"
+            >
+              <IconLabel icon={<SparklesIcon className="h-4 w-4" />}>
+                {loadingMore ? "Generating…" : "Generate 2 more recipes"}
+              </IconLabel>
+            </button>
+          </div>
+        ) : null}
       </section>
     </>
   );

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { SparklesIcon } from "@/components/icons/AppIcons";
 
 function ingredientAllergenWarning(
   ingredient: string,
@@ -45,6 +46,7 @@ type Props = {
   /** True when user has uploaded a fridge photo (ingredients may still be empty until scan). */
   hasUploadedPhoto: boolean;
   loading: boolean;
+  loadingMessage?: string;
   onRemoveIngredient: (ingredient: string) => void;
   onAddIngredient: (ingredient: string) => void;
   onGenerateRecipes: () => void;
@@ -56,6 +58,7 @@ export function IngredientsFound({
   ingredients,
   hasUploadedPhoto,
   loading,
+  loadingMessage,
   onRemoveIngredient,
   onAddIngredient,
   onGenerateRecipes,
@@ -75,12 +78,12 @@ export function IngredientsFound({
   if (!hasUploadedPhoto && !ingredients.length) return null;
 
   return (
-    <section className="mx-auto mb-6 max-w-[600px] px-6">
+    <section className="app-shell mb-4 px-4">
       <div className="flex flex-col gap-4">
         {ingredients.length > 0 ? (
           <div className="flex flex-col gap-4">
             <h4 className="text-xs font-medium uppercase tracking-wider text-[var(--green)]">
-              🥦 Ingredients detected
+              Ingredients detected
             </h4>
             <div className="flex flex-wrap gap-2">
               {ingredients.map((ingredient) => {
@@ -99,11 +102,13 @@ export function IngredientsFound({
                   >
                     {ingredient}
                     {warn ? (
-                      <span className="ml-1 inline-flex items-center rounded bg-red-100 px-1 text-[10px] font-semibold text-red-700">
-                        ⚠️ {warn}
+                      <span className="ml-1 rounded bg-red-100 px-1 text-[10px] font-semibold text-red-700">
+                        {warn}
                       </span>
                     ) : null}{" "}
-                    ✕
+                    <span className="ml-0.5 text-[10px] opacity-70" aria-hidden>
+                      x
+                    </span>
                   </button>
                 );
               })}
@@ -172,7 +177,7 @@ export function IngredientsFound({
               style={{ animation: "sparkleFloat 0.6s ease-out forwards" }}
               aria-hidden
             >
-              ✨
+              <SparklesIcon className="h-4 w-4" aria-hidden />
             </span>
           ) : null}
           {ripple ? (
@@ -187,7 +192,7 @@ export function IngredientsFound({
               aria-hidden
             />
           ) : null}
-          {loading ? "Scanning fridge…" : "Find matching recipes"}
+          {loading ? (loadingMessage ?? "Scanning & generating…") : "Find matching recipes"}
         </button>
       </div>
     </section>

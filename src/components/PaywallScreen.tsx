@@ -14,17 +14,32 @@
  *   Tap "Restore Purchases" → restoreIAPPurchases() → checks entitlements
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   purchaseProduct,
   restoreIAPPurchases,
+  fetchOfferingsSafe,
   PRODUCT_MONTHLY,
   PRODUCT_YEARLY,
 } from "@/lib/iap";
 import { useToast } from "@/components/Toast";
 import { APP_NAME } from "@/lib/brand";
 import type { UserProfile } from "@/types";
+import type { ComponentType } from "react";
+import {
+  BotIcon,
+  CalendarIcon,
+  CameraIcon,
+  ChartIcon,
+  ChefHatIcon,
+  HeartIcon,
+  StarIcon,
+  TrophyIcon,
+  UnlockIcon,
+} from "@/components/icons/AppIcons";
+
+type FeatureIcon = ComponentType<{ className?: string }>;
 
 type Plan = "monthly" | "yearly";
 
@@ -38,14 +53,14 @@ type Props = {
   setProfile: (p: UserProfile) => void;
 };
 
-const FEATURES = [
-  { icon: "📸", text: "Unlimited fridge scans" },
-  { icon: "🍽️", text: "Advanced step-by-step recipes" },
-  { icon: "📅", text: "Weekly meal planning + grocery list" },
-  { icon: "🤖", text: "Priority AI ingredient detection" },
-  { icon: "📊", text: "Full nutrition & calorie tracking" },
-  { icon: "❤️", text: "Unlimited saved recipes" },
-  { icon: "🏆", text: "Streaks & achievement system" },
+const FEATURES: Array<{ Icon: FeatureIcon; text: string }> = [
+  { Icon: CameraIcon, text: "Unlimited fridge scans" },
+  { Icon: ChefHatIcon, text: "Advanced step-by-step recipes" },
+  { Icon: CalendarIcon, text: "Weekly meal planning + grocery list" },
+  { Icon: BotIcon, text: "Priority AI ingredient detection" },
+  { Icon: ChartIcon, text: "Full nutrition & calorie tracking" },
+  { Icon: HeartIcon, text: "Unlimited saved recipes" },
+  { Icon: TrophyIcon, text: "Streaks & achievement system" },
 ];
 
 export function PaywallScreen({
@@ -59,8 +74,27 @@ export function PaywallScreen({
   const [selectedPlan, setSelectedPlan] = useState<Plan>("yearly");
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [offeringsLoading, setOfferingsLoading] = useState(false);
   const showToast = useToast();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!open) {
+      setOfferingsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setOfferingsLoading(true);
+    void fetchOfferingsSafe(appUserId).then(() => {
+      if (cancelled) return;
+      setOfferingsLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, appUserId]);
 
   if (!open) return null;
 
@@ -102,7 +136,8 @@ export function PaywallScreen({
     }
   };
 
-  const busy = loading || restoring;
+  const busy = loading || restoring || offeringsLoading;
+  const canPurchase = !offeringsLoading;
 
   return (
     <div
@@ -112,18 +147,9 @@ export function PaywallScreen({
       aria-labelledby="paywall-title"
     >
       {/* ── Header ── */}
-      <div className="relative bg-gradient-to-br from-[#1a3a06] via-[var(--green)] to-[#5a9e2f] px-6 pb-8 pt-14 text-center">
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={busy}
-          className="absolute right-4 top-5 rounded-full px-3 py-1.5 text-xs font-medium text-white/70 transition hover:text-white disabled:opacity-40"
-        >
-          Maybe later
-        </button>
-
-        <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 text-4xl shadow-inner">
-          🔓
+      <div className="relative bg-gradient-to-br from-[#1a3a06] via-[var(--green)] to-[#5a9e2f] px-6 pb-8 pt-[calc(3rem+env(safe-area-inset-top,0px))] text-center">
+        <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 shadow-inner">
+          <UnlockIcon className="h-8 w-8 text-white" />
         </div>
         <h1
           id="paywall-title"
@@ -138,14 +164,24 @@ export function PaywallScreen({
       </div>
 
       {/* ── Scrollable body ── */}
-      <div className="flex-1 overflow-y-auto px-5 pb-8 pt-5">
+      <div className="flex-1 overflow-y-auto px-5 pb-[calc(2rem+env(safe-area-inset-bottom,0px))] pt-3">
+        <div className="mb-5 flex justify-center">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="rounded-full border border-[var(--border)] bg-[var(--cream)] px-6 py-2.5 text-sm font-medium text-[var(--gray)] shadow-sm transition hover:border-[var(--green)] hover:text-[var(--green)] disabled:opacity-40"
+          >
+            Maybe later
+          </button>
+        </div>
 
         {/* Features list */}
         <ul className="mb-5 space-y-2.5">
-          {FEATURES.map(({ icon, text }) => (
+          {FEATURES.map(({ Icon, text }) => (
             <li key={text} className="flex items-center gap-3">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[var(--green-pale)] text-base">
-                {icon}
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[var(--green-pale)] text-[var(--green)]">
+                <Icon className="h-4 w-4" aria-hidden />
               </span>
               <span className="text-sm font-medium text-[var(--text)]">{text}</span>
               <span className="ml-auto text-[var(--green)]" aria-hidden>✓</span>
@@ -216,14 +252,16 @@ export function PaywallScreen({
         <button
           type="button"
           onClick={() => void handleSubscribe()}
-          disabled={busy}
+          disabled={busy || !canPurchase}
           className="w-full rounded-[14px] bg-[var(--green)] py-4 font-playfair text-lg text-white shadow-md transition hover:bg-[var(--green-light)] disabled:opacity-70"
         >
           {loading
             ? "Opening purchase…"
-            : selectedPlan === "yearly"
-            ? "Subscribe — $59.99 / year"
-            : "Subscribe — $7.99 / month"}
+            : !canPurchase
+              ? "Purchases unavailable"
+              : selectedPlan === "yearly"
+                ? "Subscribe — $59.99 / year"
+                : "Subscribe — $7.99 / month"}
         </button>
 
         <p className="mt-2 text-center text-[11px] text-[var(--gray)]">

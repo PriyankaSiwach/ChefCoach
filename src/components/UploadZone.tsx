@@ -23,6 +23,7 @@ type Props = {
   currentImage: string | null;
   onImageChange: (img: string | null) => void;
   loading: boolean;
+  loadingMessage?: string;
 };
 
 const isNative = Capacitor.isNativePlatform();
@@ -59,7 +60,7 @@ async function pickPhotoNative(): Promise<string | null> {
   }
 }
 
-export function UploadZone({ currentImage, onImageChange, loading }: Props) {
+export function UploadZone({ currentImage, onImageChange, loading, loadingMessage }: Props) {
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -86,13 +87,6 @@ export function UploadZone({ currentImage, onImageChange, loading }: Props) {
     }
   };
 
-  const reset = () => {
-    if (loading) return;
-    onImageChange(null);
-    setError(null);
-    if (inputRef.current) inputRef.current.value = "";
-  };
-
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -102,8 +96,8 @@ export function UploadZone({ currentImage, onImageChange, loading }: Props) {
           currentImage
             ? "border-[var(--green)] p-0"
             : dragOver
-              ? "border-[var(--green-light)] bg-[var(--green-pale)] border-dashed p-8"
-              : "border-[var(--border)] bg-[var(--white)] border-dashed p-8"
+              ? "border-[var(--green-light)] bg-[var(--green-pale)] border-dashed px-4 py-5 sm:p-6"
+              : "border-[var(--border)] bg-[var(--white)] border-dashed px-4 py-5 sm:p-6"
         }`}
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
@@ -117,7 +111,7 @@ export function UploadZone({ currentImage, onImageChange, loading }: Props) {
         {/* Analyzing overlay */}
         {loading && (
           <div className="absolute left-3 top-3 z-10 rounded-full bg-[var(--white)]/90 px-3 py-1 text-xs font-medium text-[var(--green)]">
-            Analyzing image…
+            {loadingMessage ?? "Analyzing image…"}
           </div>
         )}
 
@@ -127,15 +121,16 @@ export function UploadZone({ currentImage, onImageChange, loading }: Props) {
             <img
               src={currentImage}
               alt="Your fridge"
-              className="block max-h-[320px] w-full object-cover"
+              className="block max-h-[200px] w-full object-cover sm:max-h-[260px]"
             />
             <button
               type="button"
-              className="absolute right-3 top-3 rounded-full border border-[var(--border)] bg-[var(--white)] px-3 py-1.5 text-xs font-medium text-[var(--green)] shadow-sm"
-              onClick={reset}
+              className="absolute right-2 top-2 rounded-full border border-[var(--border)] bg-[var(--white)]/95 px-2 py-0.5 text-[10px] font-semibold text-[var(--green)] shadow-sm backdrop-blur-sm active:opacity-70"
+              onClick={() => void handlePickPhoto()}
               disabled={loading}
+              aria-label="Rescan fridge photo"
             >
-              ✕ Change
+              Rescan
             </button>
           </>
         ) : (
@@ -153,11 +148,11 @@ export function UploadZone({ currentImage, onImageChange, loading }: Props) {
               </svg>
             </div>
 
-            <h3 className="mb-1 text-lg font-semibold text-[var(--text)]">
+            <h3 className="mb-1 text-base font-semibold text-[var(--text)] sm:text-lg">
               Add a fridge photo
             </h3>
 
-            <p className="mx-auto max-w-[260px] text-[13px] leading-relaxed text-[var(--gray)]">
+            <p className="mx-auto max-w-[260px] text-[12px] leading-relaxed text-[var(--gray)] sm:text-[13px]">
               {isNative
                 ? "Tap below to take a photo, choose from your library, or browse files"
                 : "Tap to snap or drag and drop an image here"}
@@ -173,7 +168,7 @@ export function UploadZone({ currentImage, onImageChange, loading }: Props) {
               /* ── Native: single button → iOS action sheet ── */
               <button
                 type="button"
-                className="mt-5 w-full rounded-2xl bg-[var(--green)] py-3.5 text-sm font-semibold text-white shadow-[0_4px_14px_rgba(45,80,22,0.22)] transition hover:bg-[var(--green-light)] active:scale-[0.98] disabled:opacity-60"
+                className="mt-4 w-full rounded-2xl bg-[var(--green)] py-3 text-sm font-semibold text-white shadow-[0_4px_14px_rgba(45,80,22,0.22)] transition hover:bg-[var(--green-light)] active:scale-[0.98] disabled:opacity-60"
                 onClick={() => void handlePickPhoto()}
                 disabled={loading}
               >
