@@ -1,21 +1,22 @@
 import type { Recipe, UserProfile } from "@/types";
+import { SavedTabIcon } from "@/components/icons/TabIcons";
 import { RecipeCard } from "./RecipeCard";
 
 const SAMPLE_CARDS = [
   {
     title: "Chicken Stir Fry",
     tint: "from-amber-100/90 to-orange-50/80",
-    overlay: "🍳 Breakfast recipes",
+    overlay: "Breakfast recipes",
   },
   {
     title: "Greek Salad",
     tint: "from-emerald-100/90 to-green-50/80",
-    overlay: "🥗 Lunch & salads",
+    overlay: "Lunch & salads",
   },
   {
     title: "Pasta Primavera",
     tint: "from-rose-100/90 to-red-50/80",
-    overlay: "🍖 Dinner ideas",
+    overlay: "Dinner ideas",
   },
 ] as const;
 
@@ -29,10 +30,10 @@ type Props = {
 export function FavouritesPanel({ favourites, onToggleFavourite, profile = null, onGoCook }: Props) {
   if (favourites.length === 0) {
     return (
-      <div className="mx-auto max-w-[560px] px-6 pb-12">
+      <div className="app-shell px-4 pb-4">
         <div className="text-center">
-          <div className="text-5xl" style={{ animation: "float 3s ease-in-out infinite" }}>
-            ❤️
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--green-pale)]" style={{ animation: "float 3s ease-in-out infinite" }}>
+            <SavedTabIcon className="h-7 w-7 text-[var(--green)]" active />
           </div>
           <h2 className="mt-3 font-playfair text-xl text-[var(--green)]">Your recipe collection is empty</h2>
           <p className="mt-2 text-sm text-[var(--gray)]">
@@ -76,7 +77,7 @@ export function FavouritesPanel({ favourites, onToggleFavourite, profile = null,
   }
 
   return (
-    <section className="mx-auto max-w-[560px] px-6 pb-12">
+    <section className="app-shell space-y-3 px-4 pb-2">
       {favourites.map((recipe) => (
         <RecipeCard
           key={`fav-${recipe.name}`}

@@ -1,4 +1,6 @@
 
+import { AlertIcon, IconLabel, StarIcon } from "@/components/icons/AppIcons";
+
 type Props = {
   scansRemaining: number;
   trialEnded: boolean;
@@ -19,8 +21,14 @@ export function TrialCookBanner({ scansRemaining, trialEnded, onUpgrade }: Props
     >
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[var(--border)] px-4 py-2.5 shadow-sm">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <span className={`text-sm font-medium ${isLast ? "text-[var(--orange)]" : "text-[var(--green)]"}`}>
-            {isLast ? "⚠️ Last free scan! Make it count." : `🎁 Free trial: ${scansRemaining} scan${scansRemaining === 1 ? "" : "s"} remaining`}
+          <span className={`inline-flex items-center gap-1.5 text-sm font-medium ${isLast ? "text-[var(--orange)]" : "text-[var(--green)]"}`}>
+            {isLast ? (
+              <IconLabel icon={<AlertIcon className="h-4 w-4" />}>Last free scan! Make it count.</IconLabel>
+            ) : (
+              <IconLabel icon={<StarIcon className="h-4 w-4" />}>
+                Free trial: {scansRemaining} scan{scansRemaining === 1 ? "" : "s"} remaining
+              </IconLabel>
+            )}
           </span>
           <span className="flex gap-1 text-[var(--gray)]" aria-hidden>
             {[0, 1, 2].map((i) => (

@@ -9,6 +9,18 @@ import {
   writeMealPlan,
 } from "@/lib/meal-plan";
 import { formatLocalDate, WEEKDAY_LABELS } from "@/lib/gamification";
+import {
+  AlertIcon,
+  CalendarIcon,
+  ChartIcon,
+  ClockIcon,
+  IconLabel,
+  MacroCaloriesIcon,
+  MacroCarbsIcon,
+  MacroFatIcon,
+  MacroProteinIcon,
+  TimerIcon,
+} from "@/components/icons/AppIcons";
 
 export type RecipeModalRecipe = Recipe | RecipeResultItem;
 
@@ -454,7 +466,7 @@ export function RecipeModal({
           <div className="recipe-modal-inner mx-auto w-full max-w-[680px] px-5 pb-[80px] pt-5">
           <div className="mb-4 flex flex-wrap gap-2">
             <span className="rounded-full bg-[var(--green-pale)] px-3 py-1.5 text-xs font-medium text-[var(--green)]">
-              ⏱ {full.cookTime}
+              <IconLabel icon={<ClockIcon />}>{full.cookTime}</IconLabel>
             </span>
             <span className="rounded-full border border-[var(--border)] bg-[var(--white)] px-3 py-1.5 text-xs font-medium text-[var(--gray)]">
               {full.difficulty}
@@ -468,22 +480,26 @@ export function RecipeModal({
 
           {allergenText ? (
             <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
-              ⚠️ Contains: {allergenText} — verify before cooking
+              <IconLabel icon={<AlertIcon />}>Contains: {allergenText} — verify before cooking</IconLabel>
             </div>
           ) : null}
 
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <span className="rounded-2xl bg-[var(--orange-pale)] px-3 py-3 text-center text-base font-semibold text-[var(--orange)]">
-              🔥 {full.calories} kcal
+            <span className="flex flex-col items-center gap-1 rounded-2xl bg-[var(--orange-pale)] px-3 py-3 text-center text-base font-semibold text-[var(--orange)]">
+              <MacroCaloriesIcon className="h-4 w-4" />
+              {full.calories} kcal
             </span>
-            <span className="rounded-2xl bg-[var(--green-pale)] px-3 py-3 text-center text-base font-semibold text-[var(--green)]">
-              💪 {full.protein_g}g protein
+            <span className="flex flex-col items-center gap-1 rounded-2xl bg-[var(--green-pale)] px-3 py-3 text-center text-base font-semibold text-[var(--green)]">
+              <MacroProteinIcon className="h-4 w-4" />
+              {full.protein_g}g protein
             </span>
-            <span className="rounded-2xl bg-amber-50 px-3 py-3 text-center text-base font-semibold text-amber-900">
-              🍞 {full.carbs_g}g carbs
+            <span className="flex flex-col items-center gap-1 rounded-2xl bg-amber-50 px-3 py-3 text-center text-base font-semibold text-amber-900">
+              <MacroCarbsIcon className="h-4 w-4" />
+              {full.carbs_g}g carbs
             </span>
-            <span className="rounded-2xl bg-purple-50 px-3 py-3 text-center text-base font-semibold text-purple-900">
-              🥑 {full.fat_g}g fat
+            <span className="flex flex-col items-center gap-1 rounded-2xl bg-purple-50 px-3 py-3 text-center text-base font-semibold text-purple-900">
+              <MacroFatIcon className="h-4 w-4" />
+              {full.fat_g}g fat
             </span>
           </div>
 
@@ -569,7 +585,9 @@ export function RecipeModal({
                             timerActive ? "recipe-modal-timer-btn--active" : ""
                           }`}
                         >
-                          ⏱️ Timer ({dur >= 60 ? `${Math.round(dur / 60)} min` : `${dur}s`})
+                          <IconLabel icon={<TimerIcon className="h-3.5 w-3.5" />}>
+                            Timer ({dur >= 60 ? `${Math.round(dur / 60)} min` : `${dur}s`})
+                          </IconLabel>
                         </button>
                       ) : null}
                     </div>
@@ -585,7 +603,7 @@ export function RecipeModal({
               onClick={() => setPlanSheetOpen(true)}
               className="w-full rounded-full border-2 border-[var(--green)] bg-[var(--green-pale)] py-3.5 text-sm font-semibold text-[var(--green)] shadow-sm"
             >
-              📅 Add to this week&apos;s plan
+              <IconLabel icon={<CalendarIcon className="h-4 w-4" />}>Add to this week&apos;s plan</IconLabel>
             </button>
           </section>
 
@@ -650,7 +668,7 @@ export function RecipeModal({
               onClick={handleLog}
               className="flex-1 rounded-full bg-[var(--green)] py-3.5 text-sm font-semibold text-white"
             >
-              📊 Log This Meal
+              <IconLabel icon={<ChartIcon className="h-4 w-4" />}>Log This Meal</IconLabel>
             </button>
           </div>
         </div>

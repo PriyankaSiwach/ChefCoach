@@ -1,5 +1,6 @@
 
 import { APP_NAME } from "@/lib/brand";
+import { ChartIcon, IconLabel, MessageIcon, SparklesIcon } from "@/components/icons/AppIcons";
 
 type Props = {
   onTryForFree: () => void;
@@ -20,9 +21,15 @@ export function LandingPage({ onTryForFree }: Props) {
           lifestyle in under a minute.
         </p>
         <div className="mt-8 flex flex-wrap gap-3 text-sm">
-          <span className="rounded-full bg-white/15 px-4 py-2">🧠 Smart recipes</span>
-          <span className="rounded-full bg-white/15 px-4 py-2">📊 Macro tracking</span>
-          <span className="rounded-full bg-white/15 px-4 py-2">💬 Diet coach</span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-4 py-2">
+            <IconLabel icon={<SparklesIcon className="h-4 w-4" />}>Smart recipes</IconLabel>
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-4 py-2">
+            <IconLabel icon={<ChartIcon className="h-4 w-4" />}>Macro tracking</IconLabel>
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-4 py-2">
+            <IconLabel icon={<MessageIcon className="h-4 w-4" />}>Diet coach</IconLabel>
+          </span>
         </div>
         <div className="mt-10">
           <button

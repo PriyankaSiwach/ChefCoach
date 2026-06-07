@@ -1,5 +1,11 @@
 
 import type { ReactNode } from "react";
+import {
+  CookTabIcon,
+  PlanTabIcon,
+  ProfileTabIcon,
+  SavedTabIcon,
+} from "@/components/icons/TabIcons";
 
 type Tab = "cook" | "saved" | "plan" | "profile";
 
@@ -16,7 +22,7 @@ const tapClass =
 
 function NavIcon({ children }: { children: ReactNode }) {
   return (
-    <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center text-[20px] leading-none">
+    <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center">
       {children}
     </span>
   );
@@ -70,8 +76,8 @@ export function BottomNavigation({
   };
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-[58] border-t border-[var(--border)] bg-[var(--white)] pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-0.5 md:hidden">
-      <div className="relative mx-auto flex max-w-[600px]">
+    <nav className="fixed inset-x-0 bottom-0 z-[58] border-t border-[var(--border)] bg-[var(--white)] pb-[max(0.25rem,env(safe-area-inset-bottom,0px))] pt-0.5 md:hidden">
+      <div className="app-shell relative flex">
         <span
           className="pointer-events-none absolute bottom-0 h-[3px] rounded-full bg-[#2D5016]"
           style={{
@@ -81,9 +87,21 @@ export function BottomNavigation({
           }}
           aria-hidden
         />
-        <Item tab="cook" icon={<span aria-hidden>🍳</span>} label="Cook" />
-        <Item tab="saved" icon={<span aria-hidden>❤️</span>} label="Saved" />
-        <Item tab="plan" icon={<span aria-hidden>📅</span>} label="Plan" />
+        <Item
+          tab="cook"
+          icon={<CookTabIcon active={activeTab === "cook"} />}
+          label="Cook"
+        />
+        <Item
+          tab="saved"
+          icon={<SavedTabIcon active={activeTab === "saved"} />}
+          label="Saved"
+        />
+        <Item
+          tab="plan"
+          icon={<PlanTabIcon active={activeTab === "plan"} />}
+          label="Plan"
+        />
         <Item
           tab="profile"
           icon={
@@ -94,7 +112,7 @@ export function BottomNavigation({
                 className="h-[22px] w-[22px] rounded-full border border-[var(--border)] object-cover"
               />
             ) : (
-              <span aria-hidden>👤</span>
+              <ProfileTabIcon />
             )
           }
           label="Profile"

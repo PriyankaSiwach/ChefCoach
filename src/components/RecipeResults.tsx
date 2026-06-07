@@ -4,7 +4,9 @@ import type { Recipe, RecipeResultItem } from "@/types";
 import { readProfileFromStorage } from "@/lib/profileStorage";
 import { getRecipeRating } from "@/lib/recipe-ratings";
 import { useCountUp } from "@/hooks/useCountUp";
+import { MacroPills } from "./MacroPills";
 import { RecipeModal } from "./RecipeModal";
+import { ChartIcon, ClockIcon, IconLabel, LockIcon, TrophyIcon } from "@/components/icons/AppIcons";
 import { AllergenBadge } from "./AllergenBadge";
 
 type Props = {
@@ -36,20 +38,13 @@ function AnimatedMacroPills({
   const fatCount = useCountUp(fat, 800);
 
   return (
-    <div className="no-scrollbar mt-4 flex flex-nowrap gap-2 overflow-x-auto text-xs font-medium">
-      <span className="rounded-full bg-[var(--orange-pale)] px-3 py-1 text-[var(--orange)]">
-        🔥 {caloriesCount} kcal
-      </span>
-      <span className="rounded-full bg-[var(--green-pale)] px-3 py-1 text-[var(--green)]">
-        💪 {proteinCount}g protein
-      </span>
-      <span className="rounded-full bg-[var(--orange-pale)] px-3 py-1 text-[var(--orange)]">
-        🍞 {carbsCount}g carbs
-      </span>
-      <span className="rounded-full bg-[var(--orange-pale)] px-3 py-1 text-[var(--orange)]">
-        🥑 {fatCount}g fat
-      </span>
-    </div>
+    <MacroPills
+      className="mt-4 flex-nowrap overflow-x-auto"
+      calories={caloriesCount}
+      protein={proteinCount}
+      carbs={carbsCount}
+      fat={fatCount}
+    />
   );
 }
 
@@ -192,7 +187,7 @@ export function RecipeResults({
                 className="absolute right-4 top-3 z-[5] rounded-full bg-[var(--green)] px-2.5 py-1 text-[10px] font-bold text-white shadow-md"
                 style={{ animation: "pulseBorder 2s ease-in-out infinite" }}
               >
-                🏆 Best for your goal
+                <IconLabel icon={<TrophyIcon className="h-3 w-3" />}>Best for your goal</IconLabel>
               </span>
             ) : null}
             <div className="px-5 pb-4 pt-5">
@@ -211,7 +206,7 @@ export function RecipeResults({
 
               <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
                 <span className="rounded-full bg-[var(--green-pale)] px-3 py-1 font-medium text-[var(--green)]">
-                  ⏱ {item.cookTime}
+                  <IconLabel icon={<ClockIcon />}>{item.cookTime}</IconLabel>
                 </span>
                 <span className="rounded-full border border-[var(--border)] bg-[var(--white)] px-3 py-1 font-medium text-[var(--gray)]">
                   {item.difficulty}
@@ -309,7 +304,7 @@ export function RecipeResults({
                   onClick={() => onLogMeal(item)}
                   className="flex-1 rounded-full border border-[var(--green)] bg-[var(--green-pale)] px-4 py-2 text-sm font-medium text-[var(--green)]"
                 >
-                  📊 Log Meal
+                  <IconLabel icon={<ChartIcon className="h-4 w-4" />}>Log Meal</IconLabel>
                 </button>
                 <button
                   type="button"
@@ -333,7 +328,7 @@ export function RecipeResults({
                 className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[var(--cream)]/90 px-6 backdrop-blur-[3px]"
               >
                 <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--green-pale)] text-3xl shadow-inner" aria-hidden>
-                  🔒
+                <LockIcon className="h-7 w-7 text-[var(--green)]" />
                 </span>
                 <span className="font-playfair text-lg text-[var(--green)]">Unlock these recipes</span>
                 <span className="max-w-[260px] text-center text-sm leading-snug text-[var(--gray)]">

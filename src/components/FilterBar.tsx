@@ -1,5 +1,6 @@
 import type { DietFilter, TimeFilter } from "@/types";
 import { COOK_DIET_FILTER_OPTIONS } from "@/lib/dietConstants";
+import { ClockIcon, DietFilterIcon, IconLabel } from "@/components/icons/AppIcons";
 
 type Props = {
   selectedDiet: DietFilter;
@@ -8,8 +9,8 @@ type Props = {
   onTimeChange: (time: TimeFilter) => void;
 };
 
-const times: Array<{ label: string; value: TimeFilter }> = [
-  { label: "⏱ Any time", value: "any" },
+const times: Array<{ label: string; value: TimeFilter; showClock?: boolean }> = [
+  { label: "Any time", value: "any", showClock: true },
   { label: "Under 15 min", value: "15" },
   { label: "Under 30 min", value: "30" },
   { label: "Under 1 hour", value: "60" },
@@ -37,7 +38,7 @@ export function FilterBar({
             }`}
             onClick={() => onDietChange(d.value)}
           >
-            {d.label}
+            <IconLabel icon={<DietFilterIcon value={d.value} />}>{d.label}</IconLabel>
           </button>
         ))}
       </div>
@@ -55,7 +56,11 @@ export function FilterBar({
             }`}
             onClick={() => onTimeChange(t.value)}
           >
-            {t.label}
+            {t.showClock ? (
+              <IconLabel icon={<ClockIcon />}>{t.label}</IconLabel>
+            ) : (
+              t.label
+            )}
           </button>
         ))}
       </div>

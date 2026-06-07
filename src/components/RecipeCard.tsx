@@ -2,6 +2,8 @@
 import { useState } from "react";
 import { appendRecipeToDailyLog } from "@/lib/gamification";
 import { useCountUp } from "@/hooks/useCountUp";
+import { ChartIcon, ClockIcon, HeartIcon, IconLabel } from "@/components/icons/AppIcons";
+import { MacroPills } from "./MacroPills";
 import type { Recipe, UserProfile } from "@/types";
 import { useToast } from "./Toast";
 
@@ -30,7 +32,9 @@ export function RecipeCard({ recipe, isSaved, onToggleFavourite, profile = null,
         <div className="flex-1">
           <h3 className="font-playfair text-[20px] leading-tight">{recipe.name}</h3>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
-            <span className="font-medium text-[var(--orange)]">⏱ {recipe.cookTime}</span>
+            <span className="font-medium text-[var(--orange)]">
+              <IconLabel icon={<ClockIcon />}>{recipe.cookTime}</IconLabel>
+            </span>
             {recipe.diet ? (
               <span className="rounded-full bg-[var(--green-pale)] px-2 py-1 font-medium text-[var(--green)]">
                 {recipe.diet}
@@ -48,20 +52,20 @@ export function RecipeCard({ recipe, isSaved, onToggleFavourite, profile = null,
             className="rounded-lg border border-[var(--border)] px-2 py-1.5 text-xs font-medium text-[var(--green)]"
             title="Log meal to today"
           >
-            📊 Log Meal
+            <IconLabel icon={<ChartIcon className="h-3.5 w-3.5" />}>Log Meal</IconLabel>
           </button>
           <button
             type="button"
             onClick={() => onToggleFavourite(recipe)}
-            className={`rounded-lg border px-2 py-2 text-lg transition ${
+            className={`flex items-center justify-center rounded-lg border px-2 py-2 transition ${
               isSaved
-                ? "border-[var(--green)] bg-[var(--green-pale)]"
-                : "border-[var(--border)] bg-[var(--white)]"
+                ? "border-[var(--green)] bg-[var(--green-pale)] text-[var(--green)]"
+                : "border-[var(--border)] bg-[var(--white)] text-[var(--gray)]"
             }`}
             title={isSaved ? "Unsave recipe" : "Save recipe"}
             aria-pressed={isSaved}
           >
-            {isSaved ? "❤️" : "🤍"}
+            <HeartIcon filled={isSaved} className="h-5 w-5" />
           </button>
         </div>
       </div>
@@ -70,20 +74,13 @@ export function RecipeCard({ recipe, isSaved, onToggleFavourite, profile = null,
         {recipe.description}
       </p>
 
-      <div className="flex flex-wrap gap-2 px-5 pb-2 pt-3 text-xs font-medium">
-        <span className="rounded-full bg-[var(--orange-pale)] px-3 py-1 text-[var(--orange)]">
-          🔥 {calories} kcal
-        </span>
-        <span className="rounded-full bg-[var(--green-pale)] px-3 py-1 text-[var(--green)]">
-          💪 {protein}g protein
-        </span>
-        <span className="rounded-full bg-[var(--orange-pale)] px-3 py-1 text-[var(--orange)]">
-          🍞 {carbs}g carbs
-        </span>
-        <span className="rounded-full bg-[var(--orange-pale)] px-3 py-1 text-[var(--orange)]">
-          🥑 {fat}g fat
-        </span>
-      </div>
+      <MacroPills
+        className="px-5 pb-2 pt-3"
+        calories={calories}
+        protein={protein}
+        carbs={carbs}
+        fat={fat}
+      />
       <div className="mx-5 border-t border-[var(--gray-light)]" />
 
       <button

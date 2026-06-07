@@ -1,3 +1,5 @@
+import { MacroPills } from "./MacroPills";
+
 type MealPlanItem = {
   meal: "Breakfast" | "Lunch" | "Dinner" | "Snack";
   name: string;
@@ -36,17 +38,13 @@ export function DietPlanSection({ meals }: Props) {
               </span>
             </div>
             <p className="text-sm font-medium text-[var(--text)]">{meal.name}</p>
-            <div className="mt-2 flex flex-wrap gap-2 text-xs font-medium">
-              <span className="rounded-full bg-[var(--green-pale)] px-3 py-1 text-[var(--green)]">
-                💪 {meal.protein}g
-              </span>
-              <span className="rounded-full bg-[var(--orange-pale)] px-3 py-1 text-[var(--orange)]">
-                🍞 {meal.carbs}g
-              </span>
-              <span className="rounded-full bg-[var(--orange-pale)] px-3 py-1 text-[var(--orange)]">
-                🥑 {meal.fat}g
-              </span>
-            </div>
+            <MacroPills
+              className="mt-2"
+              calories={meal.calories}
+              protein={meal.protein}
+              carbs={meal.carbs}
+              fat={meal.fat}
+            />
             <p className="mt-3 text-sm text-[var(--gray)]">{meal.reason}</p>
           </article>
         ))}

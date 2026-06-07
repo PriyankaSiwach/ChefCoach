@@ -1,3 +1,4 @@
+import { LockIcon } from "@/components/icons/AppIcons";
 
 type Props = {
   onUpgrade: () => void;
@@ -14,8 +15,8 @@ export function TrialEndedBanner({ onUpgrade }: Props) {
     >
       <div className="mx-auto flex max-w-[600px] flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-1 items-start gap-3">
-          <span className="text-2xl leading-none text-[var(--orange)]" aria-hidden>
-            🔒
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center text-[var(--orange)]" aria-hidden>
+            <LockIcon className="h-6 w-6" />
           </span>
           <div className="min-w-0">
             <p className="text-base font-bold text-white">Your free trial has ended</p>

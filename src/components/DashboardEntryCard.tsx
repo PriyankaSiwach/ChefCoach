@@ -108,8 +108,8 @@ export function DashboardEntryCard({ profile, onOpen }: Props) {
           <span className="inline-flex items-center gap-1.5">
             {streak.count > 0 ? (
               <>
-                <span className="text-[var(--orange)]">🔥</span>
-                <span className="text-[var(--text)]">{streak.count}-day streak</span>
+                <span className="font-semibold text-[var(--orange)]">{streak.count}d</span>
+                <span className="text-[var(--text)]">streak</span>
               </>
             ) : (
               <span>Start your streak today</span>

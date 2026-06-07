@@ -31,13 +31,13 @@ export const ALLERGY_OPTIONS = [
 
 /** Cook-tab quick filter chips (includes None). */
 export const COOK_DIET_FILTER_OPTIONS: Array<{ label: string; value: DietFilter }> = [
-  { label: "🍽️ No filter", value: "None" },
-  { label: "🌿 Vegetarian", value: "Vegetarian" },
-  { label: "🥦 Vegan", value: "Vegan" },
-  { label: "🐟 Pescatarian", value: "Pescatarian" },
-  { label: "☪️ Halal", value: "Halal" },
-  { label: "🥩 Keto", value: "Keto" },
-  { label: "🌾 Gluten-free", value: "Gluten-free" },
+  { label: "No filter", value: "None" },
+  { label: "Vegetarian", value: "Vegetarian" },
+  { label: "Vegan", value: "Vegan" },
+  { label: "Pescatarian", value: "Pescatarian" },
+  { label: "Halal", value: "Halal" },
+  { label: "Keto", value: "Keto" },
+  { label: "Gluten-free", value: "Gluten-free" },
 ];
 
 /**

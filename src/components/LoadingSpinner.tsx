@@ -1,13 +1,14 @@
-
 import { useEffect, useState } from "react";
+import { Apple, Carrot, ChefHat, Cherry, Leaf, Salad } from "lucide-react";
 
 const tips = [
   "Scanning your fridge...",
-  "Reading what’s in your photo…",
+  "Reading what's in your photo…",
   "Calculating nutrition values...",
   "Crafting your recipes...",
 ];
-const EMOJIS = ["🥦", "🍳", "🥕", "🍎", "🫐", "🥗"];
+
+const LOADING_ICONS = [Leaf, ChefHat, Carrot, Apple, Cherry, Salad];
 
 export function LoadingSpinner({
   visible,
@@ -17,14 +18,14 @@ export function LoadingSpinner({
   inline?: boolean;
 }) {
   const [tipIndex, setTipIndex] = useState(0);
-  const [emojiIndex, setEmojiIndex] = useState(0);
+  const [iconIndex, setIconIndex] = useState(0);
   const [tipVisible, setTipVisible] = useState(true);
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     if (!visible) {
       setTipIndex(0);
-      setEmojiIndex(0);
+      setIconIndex(0);
       setProgress(0);
       return;
     }
@@ -37,7 +38,7 @@ export function LoadingSpinner({
   useEffect(() => {
     if (!visible) return;
     const id = window.setInterval(() => {
-      setEmojiIndex((p) => (p + 1) % EMOJIS.length);
+      setIconIndex((p) => (p + 1) % LOADING_ICONS.length);
     }, 800);
     return () => window.clearInterval(id);
   }, [visible]);
@@ -62,14 +63,16 @@ export function LoadingSpinner({
 
   if (!visible) return null;
 
+  const SpinIcon = LOADING_ICONS[iconIndex];
+
   const content = (
     <div className="mx-auto flex w-full max-w-[420px] flex-col items-center gap-3 text-center">
       <div
-        className="text-5xl"
+        className="flex h-14 w-14 items-center justify-center text-[var(--green)]"
         style={{ animation: "loading-emoji-bounce 0.8s ease-in-out infinite" }}
         aria-live="polite"
       >
-        {EMOJIS[emojiIndex]}
+        <SpinIcon className="h-10 w-10" strokeWidth={1.75} aria-hidden />
       </div>
       <span
         className="text-sm transition-opacity duration-300"

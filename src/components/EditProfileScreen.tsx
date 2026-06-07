@@ -12,6 +12,16 @@ import { ALLERGY_OPTIONS, DIETARY_STYLE_OPTIONS, isDietStyleOption } from "@/lib
 import { useToast } from "./Toast";
 import { AllergySafetyNotice } from "@/components/AllergySafetyNotice";
 import { UnitToggleInput } from "@/components/UnitToggleInput";
+import {
+  ChefHatIcon,
+  HeartIcon,
+  IconLabel,
+  MacroProteinIcon,
+  SparklesIcon,
+  TargetIcon,
+  UserIcon,
+} from "@/components/icons/AppIcons";
+import { Activity, Scale, UtensilsCrossed } from "lucide-react";
 
 type Props = {
   profile: UserProfile;
@@ -31,12 +41,12 @@ const COOKING_SKILL_OPTIONS: { id: CookingSkill; label: string }[] = [
 ];
 
 const HEALTH_FOCUS_CHIPS: { id: HealthFocusId; label: string }[] = [
-  { id: "diabetes", label: "🩺 Managing diabetes" },
-  { id: "heart", label: "❤️ Heart health" },
-  { id: "bone_joint", label: "🦴 Bone & joint health" },
-  { id: "sleep_energy", label: "😴 Better sleep & energy" },
-  { id: "sports", label: "💪 Sports performance" },
-  { id: "none", label: "✨ No specific focus" },
+  { id: "diabetes", label: "Managing diabetes" },
+  { id: "heart", label: "Heart health" },
+  { id: "bone_joint", label: "Bone & joint health" },
+  { id: "sleep_energy", label: "Better sleep & energy" },
+  { id: "sports", label: "Sports performance" },
+  { id: "none", label: "No specific focus" },
 ];
 
 const MAX_FILE_BYTES = 1.5 * 1024 * 1024;
@@ -291,7 +301,7 @@ export function EditProfileScreen({ profile, onSave, onClose }: Props) {
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <span className="text-3xl text-[var(--gray)]">👤</span>
+                  <UserIcon className="h-10 w-10 text-[var(--gray)]" aria-hidden />
                 )}
               </div>
               <div className="flex flex-col gap-2">
@@ -412,44 +422,44 @@ export function EditProfileScreen({ profile, onSave, onClose }: Props) {
             <h2 className="font-playfair text-xl text-[var(--green)]">Your lifestyle</h2>
             <div className="mt-4 flex flex-wrap gap-2">
               {[
-                { k: "lose_weight", l: "🎯 Lose weight" },
-                { k: "build_muscle", l: "💪 Build muscle" },
-                { k: "maintain_weight", l: "⚖️ Stay balanced" },
-              ].map((g) => (
+                { k: "lose_weight", l: "Lose weight", Icon: TargetIcon },
+                { k: "build_muscle", l: "Build muscle", Icon: MacroProteinIcon },
+                { k: "maintain_weight", l: "Stay balanced", Icon: Scale },
+              ].map(({ k, l, Icon }) => (
                 <button
-                  key={g.k}
+                  key={k}
                   type="button"
                   className={`rounded-full border px-3 py-2 text-xs ${
-                    inner.goal === g.k
+                    inner.goal === k
                       ? "border-[var(--green)] bg-[var(--green)] text-white"
                       : "border-[var(--border)]"
                   }`}
-                  onClick={() => update("goal", g.k as UserProfile["goal"])}
+                  onClick={() => update("goal", k as UserProfile["goal"])}
                 >
-                  {g.l}
+                  <IconLabel icon={<Icon className="h-3.5 w-3.5" aria-hidden />}>{l}</IconLabel>
                 </button>
               ))}
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {[
-                { k: "sedentary", l: "🛋️ Mostly sitting" },
-                { k: "light", l: "🚶 Lightly active" },
-                { k: "gym_regular", l: "🏋️ Gym regular" },
-                { k: "athlete", l: "🏃 Very active" },
-              ].map((a) => (
+                { k: "sedentary", l: "Mostly sitting", Icon: Scale },
+                { k: "light", l: "Lightly active", Icon: Activity },
+                { k: "gym_regular", l: "Gym regular", Icon: MacroProteinIcon },
+                { k: "athlete", l: "Very active", Icon: Activity },
+              ].map(({ k, l, Icon }) => (
                 <button
-                  key={a.k}
+                  key={k}
                   type="button"
                   className={`rounded-full border px-3 py-2 text-xs ${
-                    inner.activityLevel === a.k
+                    inner.activityLevel === k
                       ? "border-[var(--green)] bg-[var(--green)] text-white"
                       : "border-[var(--border)]"
                   }`}
                   onClick={() =>
-                    update("activityLevel", a.k as UserProfile["activityLevel"])
+                    update("activityLevel", k as UserProfile["activityLevel"])
                   }
                 >
-                  {a.l}
+                  <IconLabel icon={<Icon className="h-3.5 w-3.5" aria-hidden />}>{l}</IconLabel>
                 </button>
               ))}
             </div>
@@ -467,7 +477,10 @@ export function EditProfileScreen({ profile, onSave, onClose }: Props) {
                       : "border-[var(--border)]"
                   }`}
                 >
-                  <p className="text-sm font-semibold text-[var(--text)]">✨ For fun</p>
+                  <p className="flex items-center gap-2 text-sm font-semibold text-[var(--text)]">
+                    <SparklesIcon className="h-4 w-4" />
+                    For fun
+                  </p>
                   <p className="mt-1 text-xs text-[var(--gray)]">
                     I want healthy ideas and variety.
                   </p>
@@ -481,8 +494,9 @@ export function EditProfileScreen({ profile, onSave, onClose }: Props) {
                       : "border-[var(--border)]"
                   }`}
                 >
-                  <p className="text-sm font-semibold text-[var(--text)]">
-                    🍳 Just for cooking
+                  <p className="flex items-center gap-2 text-sm font-semibold text-[var(--text)]">
+                    <ChefHatIcon className="h-4 w-4" />
+                    Just for cooking
                   </p>
                   <p className="mt-1 text-xs text-[var(--gray)]">
                     Keep it simple and easy to cook.
@@ -497,8 +511,9 @@ export function EditProfileScreen({ profile, onSave, onClose }: Props) {
                       : "border-[var(--border)]"
                   }`}
                 >
-                  <p className="text-sm font-semibold text-[var(--text)]">
-                    🏥 Managing health
+                  <p className="flex items-center gap-2 text-sm font-semibold text-[var(--text)]">
+                    <HeartIcon className="h-4 w-4" />
+                    Managing health
                   </p>
                   <p className="mt-1 text-xs text-[var(--gray)]">
                     I want to eat better for my wellbeing.
@@ -513,8 +528,9 @@ export function EditProfileScreen({ profile, onSave, onClose }: Props) {
                       : "border-[var(--border)]"
                   }`}
                 >
-                  <p className="text-sm font-semibold text-[var(--text)]">
-                    👨‍👩‍👧 Feeding a family
+                  <p className="flex items-center gap-2 text-sm font-semibold text-[var(--text)]">
+                    <UserIcon className="h-4 w-4" />
+                    Feeding a family
                   </p>
                   <p className="mt-1 text-xs text-[var(--gray)]">
                     I need practical meals for multiple people.
@@ -595,7 +611,9 @@ export function EditProfileScreen({ profile, onSave, onClose }: Props) {
                     }`}
                     onClick={() => setDietStyleKey(null)}
                   >
-                    🍽️ No restriction
+                    <IconLabel icon={<UtensilsCrossed className="h-3.5 w-3.5" aria-hidden />}>
+                      No restriction
+                    </IconLabel>
                   </button>
                   {dietaryStyles.map((d) => (
                     <button

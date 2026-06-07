@@ -6,6 +6,16 @@ import {
   areRemindersEnabled,
   toggleReminders,
 } from "@/lib/reminderNotifications";
+import {
+  BellIcon,
+  BugIcon,
+  FileTextIcon,
+  LockIcon,
+  MessageIcon,
+  StarIcon,
+  TrashIcon,
+  UserIcon,
+} from "@/components/icons/AppIcons";
 import { useToast } from "./Toast";
 
 const SUPPORT_EMAIL = "support.chefcoach@gmail.com";
@@ -30,7 +40,7 @@ function ChevronRight() {
 }
 
 type SettingsRowProps = {
-  icon: string;
+  icon: ReactNode;
   title: string;
   subtitle?: string;
   onClick?: () => void;
@@ -56,8 +66,8 @@ function SettingsRow({
       }`}
     >
       <span
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm ${
-          destructive ? "bg-red-50" : "bg-[var(--green-pale)]"
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+          destructive ? "bg-red-50 text-red-600" : "bg-[var(--green-pale)] text-[var(--green)]"
         }`}
         aria-hidden
       >
@@ -105,7 +115,7 @@ function SettingsToggleRow({
   busy,
   onToggle,
 }: {
-  icon: string;
+  icon: ReactNode;
   title: string;
   subtitle?: string;
   enabled: boolean;
@@ -115,7 +125,7 @@ function SettingsToggleRow({
   return (
     <div className="flex min-h-[48px] items-center gap-3 px-3.5 py-2.5">
       <span
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--green-pale)] text-sm"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--green-pale)] text-[var(--green)]"
         aria-hidden
       >
         {icon}
@@ -264,7 +274,7 @@ export function ProfileSettingsPanel({
       {/* Account */}
       <SettingsSection title="Account">
         <SettingsRow
-          icon="👤"
+          icon={<UserIcon className="h-4 w-4" />}
           title="Personal info"
           subtitle={`${profile.name || "Your profile"}, diet & ${dailyCalorieTarget.toLocaleString()} kcal goal`}
           onClick={onEditProfile}
@@ -274,7 +284,7 @@ export function ProfileSettingsPanel({
       {/* Subscription & payments */}
       <SettingsSection title="Subscription & payments">
         <SettingsRow
-          icon="⭐"
+          icon={<StarIcon className="h-4 w-4" />}
           title="Subscription"
           subtitle={
             isPro
@@ -294,7 +304,7 @@ export function ProfileSettingsPanel({
       {/* Reminders */}
       <SettingsSection title="Reminders">
         <SettingsToggleRow
-          icon="🔔"
+          icon={<BellIcon className="h-4 w-4" />}
           title="Notifications"
           subtitle="Meals, water & streak reminders"
           enabled={remindersOn}
@@ -306,14 +316,14 @@ export function ProfileSettingsPanel({
       {/* Help */}
       <SettingsSection title="Help">
         <SettingsRow
-          icon="💬"
+          icon={<MessageIcon className="h-4 w-4" />}
           title="Contact Support"
           subtitle={SUPPORT_EMAIL}
           onClick={() => openMail("ChefCoach Support")}
         />
         <SettingsDivider />
         <SettingsRow
-          icon="🐛"
+          icon={<BugIcon className="h-4 w-4" />}
           title="Report a problem"
           subtitle="Send feedback or a bug report"
           onClick={() =>
@@ -325,21 +335,21 @@ export function ProfileSettingsPanel({
       {/* Legal & privacy */}
       <SettingsSection title="Legal & privacy">
         <SettingsRow
-          icon="🔒"
+          icon={<LockIcon className="h-4 w-4" />}
           title="Privacy Policy"
           subtitle="How we handle your data"
           onClick={() => navigate("/privacy")}
         />
         <SettingsDivider />
         <SettingsRow
-          icon="📄"
+          icon={<FileTextIcon className="h-4 w-4" />}
           title="Terms of Service"
           subtitle="Usage terms and conditions"
           onClick={() => navigate("/terms")}
         />
         <SettingsDivider />
         <SettingsRow
-          icon="🗑️"
+          icon={<TrashIcon className="h-4 w-4" />}
           title="Delete account"
           subtitle="Permanently remove your data"
           onClick={onDeleteAccount}
@@ -349,7 +359,7 @@ export function ProfileSettingsPanel({
 
       {/* Log out */}
       {onLogout ? (
-        <div className="mt-5 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))]">
+        <div className="mt-5 pb-4">
           <button
             type="button"
             disabled={loggingOut}
@@ -362,7 +372,7 @@ export function ProfileSettingsPanel({
           </button>
         </div>
       ) : (
-        <div className="pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))]" />
+        <div className="pb-2" />
       )}
     </div>
   );
