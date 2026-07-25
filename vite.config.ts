@@ -64,6 +64,43 @@ function devApiPlugin(): Plugin {
           return;
         }
 
+        if (pathname === "/api/auth/delete-account") {
+          try {
+            const authHeader = req.headers.authorization ?? "";
+            const token = authHeader.startsWith("Bearer ")
+              ? authHeader.slice(7)
+              : "";
+            const { deleteAccountForToken } = await import("./server/delete-account.mjs");
+            const result = await deleteAccountForToken(token);
+            if (!result.configured) {
+              res.statusCode = 503;
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ ok: false, error: "not_configured" }));
+              return;
+            }
+            if (!result.ok) {
+              const code = result.error?.includes("Invalid") ? 401 : 502;
+              res.statusCode = code;
+              res.setHeader("Content-Type", "application/json");
+              res.end(
+                JSON.stringify({
+                  ok: false,
+                  error: result.error || "Account deletion failed.",
+                })
+              );
+              return;
+            }
+            res.statusCode = 200;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ ok: true }));
+          } catch {
+            res.statusCode = 502;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ ok: false, error: "Account deletion failed." }));
+          }
+          return;
+        }
+
         if (pathname !== "/api/cook-recipes") {
           next();
           return;
@@ -107,8 +144,8 @@ export default defineConfig({
       "@capacitor/core",
       "@capacitor/camera",
       "@capacitor/local-notifications",
+      "@capacitor/push-notifications",
       "@revenuecat/purchases-capacitor",
-      "@revenuecat/purchases-capacitor-ui",
       "@revenuecat/purchases-typescript-internal-esm",
     ],
   },

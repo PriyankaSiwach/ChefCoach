@@ -22,6 +22,36 @@
   box-sizing: border-box;
 }
 
+/*
+ * Prevent iOS/WKWebView from auto-zooming the viewport when the user taps
+ * a form field. iOS zooms whenever an input's font-size is below 16px, and
+ * that zoom level persists after navigation — causing the "zoomed in after
+ * login" bug. Setting font-size ≥ 16px on every interactive field stops
+ * the auto-zoom entirely without disabling user accessibility pinch-zoom.
+ */
+input,
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="tel"],
+input[type="url"],
+input[type="search"],
+input[type="date"],
+select,
+textarea {
+  font-size: 16px !important;
+}
+
+/*
+ * Disable double-tap-to-zoom on the whole app (keeps single-tap and
+ * scroll working). This is safe for Capacitor apps where pinch-zoom
+ * is not expected.
+ */
+html {
+  touch-action: manipulation;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -30,6 +60,11 @@ body {
   color: var(--text);
   font-family: var(--font-dm-sans);
   -webkit-text-size-adjust: 100%;
+  overflow-x: hidden;
+  /* Prevents horizontal rubber-band / elastic overscroll in WKWebView.
+     Without this, swipe gestures can shift the viewport sideways making
+     the app appear "zoomed in" on Capacitor iOS. */
+  overscroll-behavior-x: none;
 }
 
 #root {
@@ -38,11 +73,12 @@ body {
   flex-direction: column;
   width: 100%;
   max-width: 100%;
-  overflow-x: clip;
+  overflow-x: hidden;
 }
 
 html {
-  overflow-x: clip;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
 }
 
 /* Centered mobile shell — scales on all iPhone widths */
@@ -67,6 +103,31 @@ html {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/*
+ * Safe-area utilities — use these on any screen that does NOT already apply
+ * .screen-overlay so that content always clears the notch, Dynamic Island,
+ * and home indicator on every iPhone/iPad variant.
+ *
+ * .inset-safe   → fixed full-screen containers (adds safe-area on all 4 sides)
+ * .page-safe    → regular (non-fixed) scrollable pages with min-h-screen
+ */
+.inset-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: max(1rem, env(safe-area-inset-left, 1rem));
+  padding-right: max(1rem, env(safe-area-inset-right, 1rem));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.page-safe {
+  /* min 32px at top — always clears Dynamic Island (59px) and notch (44px) */
+  padding-top: max(2rem, env(safe-area-inset-top, 2rem));
+  /* min 24px at bottom — always clears the home indicator (34px) */
+  padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 1.5rem));
+  /* min 24px horizontal — plus landscape safe areas on notched iPhones */
+  padding-left: max(1.5rem, env(safe-area-inset-left, 1.5rem));
+  padding-right: max(1.5rem, env(safe-area-inset-right, 1.5rem));
+}
+
 /* Long names / emails — wrap without clipping rounded corners */
 .text-wrap-safe {
   overflow-wrap: anywhere;
@@ -79,8 +140,13 @@ html {
   max-width: min(430px, 100%);
   margin-left: auto;
   margin-right: auto;
-  padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
+}
+
+/* Dashboard overlay — tab bar (z-58) stays visible above the sheet (z-56) */
+.tab-bar-clearance {
+  padding-bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
 }
 
 @media (min-width: 768px) {
@@ -151,20 +217,107 @@ html {
   0%,
   100% {
     transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(45, 80, 22, 0.35);
+    box-shadow: 0 0 0 0 rgba(168, 212, 111, 0.45);
   }
   50% {
-    transform: scale(1.12);
-    box-shadow: 0 0 0 10px rgba(45, 80, 22, 0);
+    transform: scale(1.08);
+    box-shadow: 0 0 0 8px rgba(168, 212, 111, 0);
   }
 }
 
 .streak-week-today {
-  animation: streak-week-pulse 2s ease-in-out infinite;
+  animation: streak-week-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes dashboard-entry-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 4px 24px rgba(45, 80, 22, 0.1),
+      0 0 0 0 rgba(168, 212, 111, 0);
+  }
+  50% {
+    box-shadow:
+      0 10px 36px rgba(45, 80, 22, 0.16),
+      0 0 0 3px rgba(168, 212, 111, 0.35);
+  }
+}
+
+@keyframes dashboard-entry-shimmer {
+  0% {
+    transform: translateX(-120%);
+    opacity: 0;
+  }
+  35% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: translateX(220%);
+    opacity: 0;
+  }
+}
+
+.dashboard-entry-card {
+  animation: dashboard-entry-glow 3.2s ease-in-out infinite;
+}
+
+.dashboard-entry-card__shimmer {
+  animation: dashboard-entry-shimmer 4s ease-in-out infinite;
 }
 
 .macro-ring-arc {
   transition: stroke-dashoffset 1s ease-out;
+}
+
+/* Food Tracker — scanner viewfinder */
+@keyframes foodScanLine {
+  0% {
+    transform: translateY(0%);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(calc(100% - 2px));
+    opacity: 0;
+  }
+}
+
+.food-scan-line {
+  animation: foodScanLine 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+@keyframes foodScanFramePulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.food-scan-frame {
+  animation: foodScanFramePulse 2.4s ease-in-out infinite;
+}
+
+@keyframes foodScanResultEnter {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.food-scan-result-enter {
+  animation: foodScanResultEnter 0.35s ease both;
 }
 
 @keyframes recipe-modal-slide-up {

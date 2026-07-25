@@ -223,6 +223,17 @@ export async function requestReminderPermission(): Promise<boolean> {
   return result === "granted";
 }
 
+/** Register for APNs remote notifications (iOS). Safe no-op if plugin unavailable. */
+export async function registerForRemoteNotifications(): Promise<void> {
+  if (Capacitor.getPlatform() !== "ios" || !Capacitor.isNativePlatform()) return;
+  try {
+    const { PushNotifications } = await import("@capacitor/push-notifications");
+    await PushNotifications.register();
+  } catch (err) {
+    console.warn("[reminders] remote registration failed:", err);
+  }
+}
+
 /** Rebuild today’s reminder schedule from current meal / water / streak state. */
 export async function syncReminderSchedule(): Promise<void> {
   await cancelAllScheduled();
@@ -252,6 +263,7 @@ export async function enableReminders(): Promise<{ ok: boolean; reason?: string 
   }
   setRemindersEnabled(true);
   await syncReminderSchedule();
+  await registerForRemoteNotifications();
   return { ok: true };
 }
 

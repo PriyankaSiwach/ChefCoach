@@ -1,5 +1,6 @@
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import type { CookingSkill, HealthFocusId, UserProfile } from "@/types";
 import {
   coerceCuisinesArray,
@@ -13,23 +14,17 @@ import { useToast } from "./Toast";
 import { AllergySafetyNotice } from "@/components/AllergySafetyNotice";
 import { UnitToggleInput } from "@/components/UnitToggleInput";
 import {
-  ChefHatIcon,
-  HeartIcon,
-  IconLabel,
-  MacroProteinIcon,
-  SparklesIcon,
-  TargetIcon,
-  UserIcon,
-} from "@/components/icons/AppIcons";
-import { Activity, Scale, UtensilsCrossed } from "lucide-react";
+  LifestyleProfileSection,
+  type Motivation,
+} from "@/components/LifestyleProfileSection";
+import { IconLabel, UserIcon } from "@/components/icons/AppIcons";
+import { UtensilsCrossed } from "lucide-react";
 
 type Props = {
   profile: UserProfile;
   onSave: (profile: UserProfile) => void;
   onClose: () => void;
 };
-
-type Motivation = "fun" | "just_cooking" | "health" | "family";
 
 const allergies = [...ALLERGY_OPTIONS];
 const dietaryStyles = [...DIETARY_STYLE_OPTIONS];
@@ -51,6 +46,48 @@ const HEALTH_FOCUS_CHIPS: { id: HealthFocusId; label: string }[] = [
 
 const MAX_FILE_BYTES = 1.5 * 1024 * 1024;
 const MAX_DATA_URI_CHARS = 900_000;
+const isNative = Capacitor.isNativePlatform();
+
+/** Pick a profile photo via Capacitor Camera on native (handles iPad + permissions). */
+async function pickAvatarNative(): Promise<{ dataUrl: string | null; error?: string }> {
+  try {
+    const { Camera, CameraResultType, CameraSource } = await import("@capacitor/camera");
+    const photo = await Camera.getPhoto({
+      quality: 85,
+      allowEditing: true,
+      resultType: CameraResultType.DataUrl,
+      source: CameraSource.Prompt,
+      promptLabelHeader: "Profile photo",
+      promptLabelPhoto: "Choose from Photos",
+      promptLabelPicture: "Take a Photo",
+    });
+    return { dataUrl: photo.dataUrl ?? null };
+  } catch (err) {
+    const msg = String(err).toLowerCase();
+    if (
+      msg.includes("cancelled") ||
+      msg.includes("canceled") ||
+      msg.includes("no image picked") ||
+      msg.includes("user cancelled") ||
+      msg.includes("user canceled")
+    ) {
+      return { dataUrl: null };
+    }
+    if (
+      msg.includes("denied") ||
+      msg.includes("permission") ||
+      msg.includes("restricted") ||
+      msg.includes("access")
+    ) {
+      return {
+        dataUrl: null,
+        error: "Camera or photo access is required. Go to Settings → ChefCoach and enable Camera and Photos.",
+      };
+    }
+    console.warn("[Avatar picker]", err);
+    return { dataUrl: null, error: "Unable to open photo picker. Please try again." };
+  }
+}
 
 function initialDietStyleKey(profile: UserProfile): string | null {
   if (!profile.dietaryPreference || profile.dietaryPreference === "None") return null;
@@ -62,14 +99,12 @@ function initialDietStyleKey(profile: UserProfile): string | null {
 export function EditProfileScreen({ profile, onSave, onClose }: Props) {
   const showToast = useToast();
   const [step1Name, setStep1Name] = useState(profile.name);
-  const [step1Age, setStep1Age] = useState(String(profile.age));
-  const [step1Weight, setStep1Weight] = useState(String(profile.weightKg));
-  const [step1Height, setStep1Height] = useState(String(profile.heightCm));
+  const [step1Weight, setStep1Weight] = useState(
+    profile.weightKg > 0 ? String(profile.weightKg) : ""
+  );
   const [step1Errors, setStep1Errors] = useState<{
     name?: string;
-    age?: string;
     weightKg?: string;
-    heightCm?: string;
   }>({});
 
   const [motivation, setMotivation] = useState<Motivation>(() => {
@@ -104,6 +139,8 @@ export function EditProfileScreen({ profile, onSave, onClose }: Props) {
     profile.avatarDataUri ?? null
   );
   const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [avatarLoading, setAvatarLoading] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const update = <K extends keyof UserProfile>(k: K, v: UserProfile[K]) =>
     setInner((p) => ({ ...p, [k]: v }));
@@ -121,28 +158,10 @@ export function EditProfileScreen({ profile, onSave, onClose }: Props) {
   const validateStep1 = () => {
     const next: typeof step1Errors = {};
     if (!step1Name.trim()) next.name = "Please enter your name.";
-    if (!step1Age.trim()) {
-      next.age = "Please enter your age.";
-    } else {
-      const age = Number(step1Age);
-      if (!Number.isFinite(age) || age < 10 || age > 100) {
-        next.age = "Age must be between 10 and 100.";
-      }
-    }
-    if (!step1Weight.trim()) {
-      next.weightKg = "Please enter your weight.";
-    } else {
+    if (step1Weight.trim()) {
       const w = Number(step1Weight);
       if (!Number.isFinite(w) || w < 20 || w > 300) {
         next.weightKg = "Please enter a valid weight (20–300 kg / 44–660 lb).";
-      }
-    }
-    if (!step1Height.trim()) {
-      next.heightCm = "Please enter your height.";
-    } else {
-      const h = Number(step1Height);
-      if (!Number.isFinite(h) || h < 50 || h > 250) {
-        next.heightCm = "Please enter a valid height (50–250 cm / 20–98 in).";
       }
     }
     setStep1Errors(next);
@@ -220,6 +239,29 @@ export function EditProfileScreen({ profile, onSave, onClose }: Props) {
     reader.readAsDataURL(file);
   };
 
+  const handleAvatarTap = async () => {
+    setAvatarError(null);
+    if (isNative) {
+      setAvatarLoading(true);
+      try {
+        const result = await pickAvatarNative();
+        if (result.error) {
+          setAvatarError(result.error);
+        } else if (result.dataUrl) {
+          if (result.dataUrl.length > MAX_DATA_URI_CHARS) {
+            setAvatarError("That image is too large. Try a smaller photo.");
+          } else {
+            setAvatarDataUri(result.dataUrl);
+          }
+        }
+      } finally {
+        setAvatarLoading(false);
+      }
+    } else {
+      avatarInputRef.current?.click();
+    }
+  };
+
   const handleSave = () => {
     if (!validateStep1()) return;
 
@@ -241,9 +283,9 @@ export function EditProfileScreen({ profile, onSave, onClose }: Props) {
     const saved: UserProfile = {
       ...inner,
       name: step1Name.trim(),
-      age: Number(step1Age),
-      weightKg: Number(step1Weight),
-      heightCm: Number(step1Height),
+      age: profile.age ?? 30,
+      weightKg: step1Weight.trim() ? Number(step1Weight) : 0,
+      heightCm: 0,
       dietaryPreference: dietaryPreferenceValue as UserProfile["dietaryPreference"],
       goesToGym: motivation === "fun",
       mealsPerDay: inner.mealsPerDay ?? 3,
@@ -271,7 +313,7 @@ export function EditProfileScreen({ profile, onSave, onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] overflow-y-auto bg-[var(--cream)]">
+    <div className="inset-safe fixed inset-0 z-[100] overflow-y-auto bg-[var(--cream)]">
       <main className="mx-auto min-h-full w-full max-w-[680px] px-4 py-6 pb-28 md:px-6 md:py-8">
         <div className="mb-6 flex items-center gap-3">
           <button
@@ -305,15 +347,24 @@ export function EditProfileScreen({ profile, onSave, onClose }: Props) {
                 )}
               </div>
               <div className="flex flex-col gap-2">
-                <label className="cursor-pointer rounded-full bg-[var(--green)] px-4 py-2 text-center text-sm text-white">
-                  Choose photo
+                <button
+                  type="button"
+                  disabled={avatarLoading}
+                  onClick={() => void handleAvatarTap()}
+                  className="cursor-pointer rounded-full bg-[var(--green)] px-4 py-2 text-center text-sm text-white disabled:opacity-60"
+                >
+                  {avatarLoading ? "Opening…" : "Choose photo"}
+                </button>
+                {/* Web-only hidden file input */}
+                {!isNative && (
                   <input
+                    ref={avatarInputRef}
                     type="file"
                     accept="image/*"
                     className="hidden"
                     onChange={(e) => onAvatarPick(e.target.files?.[0])}
                   />
-                </label>
+                )}
                 {avatarDataUri ? (
                   <button
                     type="button"
@@ -357,22 +408,6 @@ export function EditProfileScreen({ profile, onSave, onClose }: Props) {
                 ) : null}
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-[var(--gray)]">Age</label>
-                <input
-                  aria-label="Age"
-                  className="w-full rounded-xl border border-[var(--border)] px-3 py-2 text-sm"
-                  type="number"
-                  value={step1Age}
-                  onChange={(e) => {
-                    setStep1Age(e.target.value);
-                    setStep1Errors((er) => ({ ...er, age: undefined }));
-                  }}
-                />
-                {step1Errors.age ? (
-                  <p className="mt-1 text-xs text-red-600">{step1Errors.age}</p>
-                ) : null}
-              </div>
-              <div>
                 <p className="mb-1 text-xs font-medium text-[var(--gray)]">Biological sex</p>
                 <p className="mb-2 text-[11px] leading-snug text-[var(--gray)]">
                   Used for calorie calculation only.
@@ -396,6 +431,7 @@ export function EditProfileScreen({ profile, onSave, onClose }: Props) {
               </div>
               <UnitToggleInput
                 type="weight"
+                optional
                 valueInBase={step1Weight}
                 onChange={(v) => {
                   setStep1Weight(v);
@@ -403,143 +439,26 @@ export function EditProfileScreen({ profile, onSave, onClose }: Props) {
                 }}
                 error={step1Errors.weightKg}
               />
-              <UnitToggleInput
-                type="height"
-                valueInBase={step1Height}
-                onChange={(v) => {
-                  setStep1Height(v);
-                  setStep1Errors((er) => ({ ...er, heightCm: undefined }));
-                }}
-                error={step1Errors.heightCm}
-              />
               <p className="text-[11px] leading-relaxed text-[var(--gray)]">
-                Used only to calculate your daily calorie target. Never shared.
+                Optional — used for calorie target estimates only.
               </p>
             </div>
           </section>
 
           <section className="rounded-3xl border border-[var(--border)] bg-[var(--white)] p-5 shadow-sm md:p-6">
             <h2 className="font-playfair text-xl text-[var(--green)]">Your lifestyle</h2>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {[
-                { k: "lose_weight", l: "Lose weight", Icon: TargetIcon },
-                { k: "build_muscle", l: "Build muscle", Icon: MacroProteinIcon },
-                { k: "maintain_weight", l: "Stay balanced", Icon: Scale },
-              ].map(({ k, l, Icon }) => (
-                <button
-                  key={k}
-                  type="button"
-                  className={`rounded-full border px-3 py-2 text-xs ${
-                    inner.goal === k
-                      ? "border-[var(--green)] bg-[var(--green)] text-white"
-                      : "border-[var(--border)]"
-                  }`}
-                  onClick={() => update("goal", k as UserProfile["goal"])}
-                >
-                  <IconLabel icon={<Icon className="h-3.5 w-3.5" aria-hidden />}>{l}</IconLabel>
-                </button>
-              ))}
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {[
-                { k: "sedentary", l: "Mostly sitting", Icon: Scale },
-                { k: "light", l: "Lightly active", Icon: Activity },
-                { k: "gym_regular", l: "Gym regular", Icon: MacroProteinIcon },
-                { k: "athlete", l: "Very active", Icon: Activity },
-              ].map(({ k, l, Icon }) => (
-                <button
-                  key={k}
-                  type="button"
-                  className={`rounded-full border px-3 py-2 text-xs ${
-                    inner.activityLevel === k
-                      ? "border-[var(--green)] bg-[var(--green)] text-white"
-                      : "border-[var(--border)]"
-                  }`}
-                  onClick={() =>
-                    update("activityLevel", k as UserProfile["activityLevel"])
-                  }
-                >
-                  <IconLabel icon={<Icon className="h-3.5 w-3.5" aria-hidden />}>{l}</IconLabel>
-                </button>
-              ))}
-            </div>
             <div className="mt-4">
-              <p className="mb-2 text-xs font-medium uppercase tracking-[0.08em] text-[var(--gray)]">
-                What brings you here?
-              </p>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => applyMotivation("fun")}
-                  className={`rounded-2xl border px-4 py-3 text-left transition ${
-                    motivation === "fun"
-                      ? "border-[var(--green)] bg-[var(--green-pale)]"
-                      : "border-[var(--border)]"
-                  }`}
-                >
-                  <p className="flex items-center gap-2 text-sm font-semibold text-[var(--text)]">
-                    <SparklesIcon className="h-4 w-4" />
-                    For fun
-                  </p>
-                  <p className="mt-1 text-xs text-[var(--gray)]">
-                    I want healthy ideas and variety.
-                  </p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyMotivation("just_cooking")}
-                  className={`rounded-2xl border px-4 py-3 text-left transition ${
-                    motivation === "just_cooking"
-                      ? "border-[var(--green)] bg-[var(--green-pale)]"
-                      : "border-[var(--border)]"
-                  }`}
-                >
-                  <p className="flex items-center gap-2 text-sm font-semibold text-[var(--text)]">
-                    <ChefHatIcon className="h-4 w-4" />
-                    Just for cooking
-                  </p>
-                  <p className="mt-1 text-xs text-[var(--gray)]">
-                    Keep it simple and easy to cook.
-                  </p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyMotivation("health")}
-                  className={`rounded-2xl border px-4 py-3 text-left transition ${
-                    motivation === "health"
-                      ? "border-[var(--green)] bg-[var(--green-pale)]"
-                      : "border-[var(--border)]"
-                  }`}
-                >
-                  <p className="flex items-center gap-2 text-sm font-semibold text-[var(--text)]">
-                    <HeartIcon className="h-4 w-4" />
-                    Managing health
-                  </p>
-                  <p className="mt-1 text-xs text-[var(--gray)]">
-                    I want to eat better for my wellbeing.
-                  </p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyMotivation("family")}
-                  className={`rounded-2xl border px-4 py-3 text-left transition ${
-                    motivation === "family"
-                      ? "border-[var(--green)] bg-[var(--green-pale)]"
-                      : "border-[var(--border)]"
-                  }`}
-                >
-                  <p className="flex items-center gap-2 text-sm font-semibold text-[var(--text)]">
-                    <UserIcon className="h-4 w-4" />
-                    Feeding a family
-                  </p>
-                  <p className="mt-1 text-xs text-[var(--gray)]">
-                    I need practical meals for multiple people.
-                  </p>
-                </button>
-              </div>
+              <LifestyleProfileSection
+                goal={inner.goal}
+                activityLevel={inner.activityLevel}
+                motivation={motivation}
+                onGoalChange={(k) => update("goal", k)}
+                onActivityChange={(k) => update("activityLevel", k)}
+                onMotivationChange={applyMotivation}
+              />
             </div>
 
-            <div className="mt-4 rounded-2xl border border-[var(--border)] bg-[var(--white)] p-4 shadow-sm">
+            <div className="mt-6 rounded-2xl border border-[var(--border)] bg-[var(--white)] p-4 shadow-sm">
               <p className="mb-3 text-xs font-medium uppercase tracking-[0.08em] text-[var(--gray)]">
                 Household
               </p>
@@ -568,6 +487,33 @@ export function EditProfileScreen({ profile, onSave, onClose }: Props) {
                 />
                 Prefer kid-friendly, simple recipes when possible
               </label>
+            </div>
+          </section>
+
+          <section className="rounded-3xl border border-[var(--border)] bg-[var(--white)] p-5 shadow-sm md:p-6">
+            <h2 className="font-playfair text-xl text-[var(--green)]">Health focus</h2>
+            <p className="mt-1 text-xs text-[var(--gray)]">
+              Optional — we use this to prioritise certain meals in suggestions.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {HEALTH_FOCUS_CHIPS.map(({ id, label }) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={`rounded-full border px-3 py-2 text-xs ${
+                    id === "none"
+                      ? healthFocuses.length === 0
+                        ? "border-[var(--green)] bg-[var(--green)] text-white"
+                        : "border-[var(--border)]"
+                      : healthFocuses.includes(id)
+                        ? "border-[var(--green)] bg-[var(--green-pale)] text-[var(--green)]"
+                        : "border-[var(--border)]"
+                  }`}
+                  onClick={() => toggleHealthFocus(id)}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           </section>
 
@@ -741,32 +687,6 @@ export function EditProfileScreen({ profile, onSave, onClose }: Props) {
             </div>
           </section>
 
-          <section className="rounded-3xl border border-[var(--border)] bg-[var(--white)] p-5 shadow-sm md:p-6">
-            <h2 className="font-playfair text-xl text-[var(--green)]">Health focus</h2>
-            <p className="mt-1 text-xs text-[var(--gray)]">
-              Optional — we use this to prioritise certain meals in suggestions.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {HEALTH_FOCUS_CHIPS.map(({ id, label }) => (
-                <button
-                  key={id}
-                  type="button"
-                  className={`rounded-full border px-3 py-2 text-xs ${
-                    id === "none"
-                      ? healthFocuses.length === 0
-                        ? "border-[var(--green)] bg-[var(--green)] text-white"
-                        : "border-[var(--border)]"
-                      : healthFocuses.includes(id)
-                        ? "border-[var(--green)] bg-[var(--green-pale)] text-[var(--green)]"
-                        : "border-[var(--border)]"
-                  }`}
-                  onClick={() => toggleHealthFocus(id)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </section>
         </div>
 
         <div className="fixed bottom-0 left-0 right-0 z-[101] border-t border-[var(--border)] bg-[var(--cream)]/95 px-4 py-4 backdrop-blur md:static md:z-auto md:mt-8 md:border-0 md:bg-transparent md:px-0 md:py-0 md:backdrop-blur-none">

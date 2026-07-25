@@ -12,19 +12,18 @@ import {
 } from "@/lib/profileStorage";
 import { ALLERGY_OPTIONS, DIETARY_STYLE_OPTIONS, isDietStyleOption } from "@/lib/dietConstants";
 import { upsertProfileToSupabase } from "@/lib/profileSupabase";
+import { markOnboardingCompleteOnDevice } from "@/lib/onboardingGate";
 import { useAuth } from "@/contexts/AuthContext";
 import { AllergySafetyNotice } from "@/components/AllergySafetyNotice";
 import { UnitToggleInput } from "@/components/UnitToggleInput";
 import {
-  ChefHatIcon,
-  HeartIcon,
+  LifestyleProfileSection,
+  type Motivation,
+} from "@/components/LifestyleProfileSection";
+import {
   IconLabel,
-  MacroProteinIcon,
-  SparklesIcon,
-  TargetIcon,
-  UserIcon,
 } from "@/components/icons/AppIcons";
-import { Activity, Scale, UtensilsCrossed } from "lucide-react";
+import { UtensilsCrossed } from "lucide-react";
 
 type Props = {
   initialProfile?: UserProfile | null;
@@ -45,8 +44,6 @@ const HEALTH_FOCUS_CHIPS: { id: HealthFocusId; label: string }[] = [
   { id: "sports", label: "Sports performance" },
   { id: "none", label: "No specific focus" },
 ];
-
-type Motivation = "fun" | "just_cooking" | "health" | "family";
 
 function titleForStep(step: number): string {
   switch (step) {
@@ -106,21 +103,25 @@ export function OnboardingModal({ initialProfile, onComplete }: Props) {
 
   const [step, setStep] = useState(1);
   const [stepDirection, setStepDirection] = useState<"fwd" | "back">("fwd");
-  const [step1Name, setStep1Name] = useState(initialProfile?.name ?? "");
+  // Pre-fill name from Apple/Google sign-in metadata so users don't have to
+  // re-enter info that the Authentication Services framework already provided.
+  const [step1Name, setStep1Name] = useState(
+    initialProfile?.name ||
+    (user?.user_metadata?.full_name as string | undefined) ||
+    (user?.user_metadata?.name as string | undefined) ||
+    ""
+  );
   const [step1Age, setStep1Age] = useState(
     initialProfile != null ? String(initialProfile.age) : ""
   );
   const [step1Weight, setStep1Weight] = useState(
-    initialProfile != null ? String(initialProfile.weightKg) : ""
-  );
-  const [step1Height, setStep1Height] = useState(
-    initialProfile != null ? String(initialProfile.heightCm) : ""
+    initialProfile != null && initialProfile.weightKg > 0
+      ? String(initialProfile.weightKg)
+      : ""
   );
   const [step1Errors, setStep1Errors] = useState<{
-    name?: string;
     age?: string;
     weightKg?: string;
-    heightCm?: string;
   }>({});
 
   const [motivation, setMotivation] = useState<Motivation>(() => {
@@ -166,29 +167,19 @@ export function OnboardingModal({ initialProfile, onComplete }: Props) {
 
   const validateStep1 = () => {
     const next: typeof step1Errors = {};
-    if (!step1Name.trim()) next.name = "Please enter your name.";
-    if (!step1Age.trim()) {
-      next.age = "Please enter your age.";
-    } else {
+    // Name is optional — Apple/Google may already provide it, and users
+    // must never be blocked because of a missing name (Apple guideline 4).
+    if (step1Age.trim()) {
       const age = Number(step1Age);
       if (!Number.isFinite(age) || age < 10 || age > 100) {
         next.age = "Age must be between 10 and 100.";
       }
     }
-    if (!step1Weight.trim()) {
-      next.weightKg = "Please enter your weight.";
-    } else {
+    // Weight is optional — if omitted we use defaults for calorie estimates
+    if (step1Weight.trim()) {
       const w = Number(step1Weight);
       if (!Number.isFinite(w) || w < 20 || w > 300) {
         next.weightKg = "Please enter a valid weight (20–300 kg / 44–660 lb).";
-      }
-    }
-    if (!step1Height.trim()) {
-      next.heightCm = "Please enter your height.";
-    } else {
-      const h = Number(step1Height);
-      if (!Number.isFinite(h) || h < 50 || h > 250) {
-        next.heightCm = "Please enter a valid height (50–250 cm / 20–98 in).";
       }
     }
     setStep1Errors(next);
@@ -243,15 +234,14 @@ export function OnboardingModal({ initialProfile, onComplete }: Props) {
   const advanceOrComplete = () => {
     if (step === 1) {
       if (!validateStep1()) return;
-      const age = Number(step1Age);
-      const weightKg = Number(step1Weight);
-      const heightCm = Number(step1Height);
+      const age = step1Age.trim() ? Number(step1Age) : 30;
+      const weightKg = step1Weight.trim() ? Number(step1Weight) : 0;
       setProfile((p) => ({
         ...p,
-        name: step1Name.trim(),
+        name: step1Name.trim() || "",
         age,
         weightKg,
-        heightCm,
+        heightCm: 0,
       }));
       setStep1Errors({});
       setStepDirection("fwd");
@@ -315,7 +305,37 @@ export function OnboardingModal({ initialProfile, onComplete }: Props) {
         if (error) console.warn("Profile sync after onboarding:", error);
       });
     }
+    markOnboardingCompleteOnDevice();
     onComplete(completed);
+  };
+
+  /** Skip the current step — advances without requiring any input, using
+   *  sensible defaults for anything left blank or invalid. */
+  const skipStep = () => {
+    if (step === 1) {
+      const ageNum = Number(step1Age);
+      const validAge =
+        step1Age.trim() !== "" && Number.isFinite(ageNum) && ageNum >= 10 && ageNum <= 100;
+      const weightNum = Number(step1Weight);
+      const validWeight =
+        step1Weight.trim() !== "" && Number.isFinite(weightNum) && weightNum >= 20 && weightNum <= 300;
+
+      setProfile((p) => ({
+        ...p,
+        name: step1Name.trim(),
+        age: validAge ? ageNum : 30,
+        weightKg: validWeight ? weightNum : 0,
+        heightCm: 0,
+      }));
+      setStep1Errors({});
+      setStepDirection("fwd");
+      setStep(2);
+      return;
+    }
+    if (step < 5) {
+      setStepDirection("fwd");
+      setStep((s) => s + 1);
+    }
   };
 
   const goBack = () => {
@@ -324,8 +344,7 @@ export function OnboardingModal({ initialProfile, onComplete }: Props) {
     if (step === 2) {
       setStep1Name(profile.name);
       setStep1Age(profile.age ? String(profile.age) : "");
-      setStep1Weight(profile.weightKg ? String(profile.weightKg) : "");
-      setStep1Height(profile.heightCm ? String(profile.heightCm) : "");
+      setStep1Weight(profile.weightKg > 0 ? String(profile.weightKg) : "");
       setStep1Errors({});
     }
     setStep((s) => Math.max(1, s - 1));
@@ -369,24 +388,25 @@ export function OnboardingModal({ initialProfile, onComplete }: Props) {
           <div className={`space-y-3 ${slideClass}`}>
             <div>
               <label className="mb-1 block text-xs font-medium text-[var(--gray)]">
-                Your name
+                Your name{" "}
+                <span className="font-normal text-[var(--gray)]/70">(optional)</span>
               </label>
               <input
-                aria-label="Your name"
+                aria-label="Your name (optional)"
                 className="w-full rounded-xl border border-[var(--border)] px-3 py-2 text-sm"
-                placeholder="Your name"
+                placeholder="Name"
                 value={step1Name}
-                onChange={(e) => {
-                  setStep1Name(e.target.value);
-                  setStep1Errors((er) => ({ ...er, name: undefined }));
-                }}
+                onChange={(e) => setStep1Name(e.target.value)}
               />
-              {step1Errors.name ? (
-                <p className="mt-1 text-xs text-red-600">{step1Errors.name}</p>
+              {step1Name &&
+              (user?.user_metadata?.full_name || user?.user_metadata?.name) ? (
+                <p className="mt-1 text-[11px] text-[var(--green)]">
+                  ✓ Pre-filled from your sign-in — feel free to edit.
+                </p>
               ) : null}
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-[var(--gray)]">Age</label>
+              <label className="mb-1 block text-xs font-medium text-[var(--gray)]">Age <span className="font-normal text-[var(--gray)]/70">(optional)</span></label>
               <input
                 aria-label="Age"
                 className="w-full rounded-xl border border-[var(--border)] px-3 py-2 text-sm"
@@ -426,6 +446,7 @@ export function OnboardingModal({ initialProfile, onComplete }: Props) {
             </div>
             <UnitToggleInput
               type="weight"
+              optional
               valueInBase={step1Weight}
               onChange={(v) => {
                 setStep1Weight(v);
@@ -433,141 +454,22 @@ export function OnboardingModal({ initialProfile, onComplete }: Props) {
               }}
               error={step1Errors.weightKg}
             />
-            <UnitToggleInput
-              type="height"
-              valueInBase={step1Height}
-              onChange={(v) => {
-                setStep1Height(v);
-                setStep1Errors((er) => ({ ...er, heightCm: undefined }));
-              }}
-              error={step1Errors.heightCm}
-            />
             <p className="text-[11px] leading-relaxed text-[var(--gray)]">
-              Used only to calculate your daily calorie target. Never shared.
+              Weight helps personalize calorie targets. You can skip it and add it later in Profile.
             </p>
           </div>
         ) : null}
 
         {step === 2 ? (
-          <div className={`space-y-3 ${slideClass}`}>
-            <div className="flex flex-wrap gap-2">
-              {[
-                { k: "lose_weight", l: "Lose weight", Icon: TargetIcon },
-                { k: "build_muscle", l: "Build muscle", Icon: MacroProteinIcon },
-                { k: "maintain_weight", l: "Stay balanced", Icon: Scale },
-              ].map(({ k, l, Icon }) => (
-                <button
-                  key={k}
-                  type="button"
-                  className={`rounded-full border px-3 py-2 text-xs ${
-                    profile.goal === k
-                      ? "border-[var(--green)] bg-[var(--green)] text-white"
-                      : "border-[var(--border)]"
-                  }`}
-                  onClick={() => update("goal", k as UserProfile["goal"])}
-                >
-                  <IconLabel icon={<Icon className="h-3.5 w-3.5" aria-hidden />}>{l}</IconLabel>
-                </button>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {[
-                { k: "sedentary", l: "Mostly sitting", Icon: Scale },
-                { k: "light", l: "Lightly active", Icon: Activity },
-                { k: "gym_regular", l: "Gym regular", Icon: MacroProteinIcon },
-                { k: "athlete", l: "Very active", Icon: Activity },
-              ].map(({ k, l, Icon }) => (
-                <button
-                  key={k}
-                  type="button"
-                  className={`rounded-full border px-3 py-2 text-xs ${
-                    profile.activityLevel === k
-                      ? "border-[var(--green)] bg-[var(--green)] text-white"
-                      : "border-[var(--border)]"
-                  }`}
-                  onClick={() =>
-                    update("activityLevel", k as UserProfile["activityLevel"])
-                  }
-                >
-                  <IconLabel icon={<Icon className="h-3.5 w-3.5" aria-hidden />}>{l}</IconLabel>
-                </button>
-              ))}
-            </div>
-            <div>
-              <p className="mb-2 text-xs font-medium uppercase tracking-[0.08em] text-[var(--gray)]">
-                What brings you here?
-              </p>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => applyMotivation("fun")}
-                  className={`rounded-2xl border px-4 py-3 text-left transition ${
-                    motivation === "fun"
-                      ? "border-[var(--green)] bg-[var(--green-pale)]"
-                      : "border-[var(--border)]"
-                  }`}
-                >
-                  <p className="flex items-center gap-2 text-sm font-semibold text-[var(--text)]">
-                    <SparklesIcon className="h-4 w-4" />
-                    For fun
-                  </p>
-                  <p className="mt-1 text-xs text-[var(--gray)]">
-                    I want healthy ideas and variety.
-                  </p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyMotivation("just_cooking")}
-                  className={`rounded-2xl border px-4 py-3 text-left transition ${
-                    motivation === "just_cooking"
-                      ? "border-[var(--green)] bg-[var(--green-pale)]"
-                      : "border-[var(--border)]"
-                  }`}
-                >
-                  <p className="flex items-center gap-2 text-sm font-semibold text-[var(--text)]">
-                    <ChefHatIcon className="h-4 w-4" />
-                    Just for cooking
-                  </p>
-                  <p className="mt-1 text-xs text-[var(--gray)]">
-                    Keep it simple and easy to cook.
-                  </p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyMotivation("health")}
-                  className={`rounded-2xl border px-4 py-3 text-left transition ${
-                    motivation === "health"
-                      ? "border-[var(--green)] bg-[var(--green-pale)]"
-                      : "border-[var(--border)]"
-                  }`}
-                >
-                  <p className="flex items-center gap-2 text-sm font-semibold text-[var(--text)]">
-                    <HeartIcon className="h-4 w-4" />
-                    Managing health
-                  </p>
-                  <p className="mt-1 text-xs text-[var(--gray)]">
-                    I want to eat better for my wellbeing.
-                  </p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyMotivation("family")}
-                  className={`rounded-2xl border px-4 py-3 text-left transition ${
-                    motivation === "family"
-                      ? "border-[var(--green)] bg-[var(--green-pale)]"
-                      : "border-[var(--border)]"
-                  }`}
-                >
-                  <p className="flex items-center gap-2 text-sm font-semibold text-[var(--text)]">
-                    <UserIcon className="h-4 w-4" />
-                    Feeding a family
-                  </p>
-                  <p className="mt-1 text-xs text-[var(--gray)]">
-                    I need practical meals for multiple people.
-                  </p>
-                </button>
-              </div>
-            </div>
+          <div className={slideClass}>
+            <LifestyleProfileSection
+              goal={profile.goal}
+              activityLevel={profile.activityLevel}
+              motivation={motivation}
+              onGoalChange={(k) => update("goal", k)}
+              onActivityChange={(k) => update("activityLevel", k)}
+              onMotivationChange={applyMotivation}
+            />
           </div>
         ) : null}
 
@@ -765,7 +667,7 @@ export function OnboardingModal({ initialProfile, onComplete }: Props) {
           </div>
         ) : null}
 
-        <div className="mt-5 flex justify-between gap-2">
+        <div className="mt-5 flex items-center justify-between gap-2">
           <button
             type="button"
             className="rounded-full border border-[var(--border)] px-4 py-2 text-sm text-[var(--gray)] disabled:cursor-not-allowed disabled:opacity-40"
@@ -774,13 +676,24 @@ export function OnboardingModal({ initialProfile, onComplete }: Props) {
           >
             Back
           </button>
-          <button
-            type="button"
-            className="rounded-full bg-[var(--green)] px-5 py-2 text-sm text-white"
-            onClick={advanceOrComplete}
-          >
-            {step < 5 ? "Next" : "Complete Setup"}
-          </button>
+          <div className="flex items-center gap-3">
+            {step < 5 ? (
+              <button
+                type="button"
+                className="px-1 py-2 text-sm font-medium text-[var(--gray)] underline underline-offset-2 transition hover:text-[var(--green)]"
+                onClick={skipStep}
+              >
+                Skip
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="rounded-full bg-[var(--green)] px-5 py-2 text-sm text-white"
+              onClick={advanceOrComplete}
+            >
+              {step < 5 ? "Next" : "Complete Setup"}
+            </button>
+          </div>
         </div>
       </section>
       </div>

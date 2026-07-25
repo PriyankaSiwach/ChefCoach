@@ -49,6 +49,7 @@ type WeightProps = {
   valueInBase: string;
   onChange: (newDisplayValue: string) => void;
   error?: string;
+  optional?: boolean;
 };
 
 type HeightProps = {
@@ -61,7 +62,9 @@ type HeightProps = {
 
 type Props = WeightProps | HeightProps;
 
-export function UnitToggleInput({ type, valueInBase, onChange, error }: Props) {
+export function UnitToggleInput(props: Props) {
+  const { type, valueInBase, onChange, error } = props;
+  const optional = type === "weight" ? props.optional : false;
   const [useImperial, setUseImperial] = useState(false);
 
   // ── Derive display value from base ────────────────────────────────────────
@@ -94,7 +97,7 @@ export function UnitToggleInput({ type, valueInBase, onChange, error }: Props) {
 
   // ── Label + placeholder ───────────────────────────────────────────────────
   const label    = type === "weight"
-    ? `Weight (${useImperial ? "lb" : "kg"})`
+    ? `Weight (${useImperial ? "lb" : "kg"})${optional ? " — optional" : ""}`
     : `Height (${useImperial ? "in" : "cm"})`;
 
   const ariaLbl  = type === "weight"

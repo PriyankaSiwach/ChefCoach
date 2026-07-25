@@ -4,6 +4,7 @@ import { appendRecipeToDailyLog } from "@/lib/gamification";
 import { useCountUp } from "@/hooks/useCountUp";
 import { ChartIcon, ClockIcon, HeartIcon, IconLabel } from "@/components/icons/AppIcons";
 import { MacroPills } from "./MacroPills";
+import { NutritionDisclaimer } from "./NutritionDisclaimer";
 import type { Recipe, UserProfile } from "@/types";
 import { useToast } from "./Toast";
 
@@ -101,6 +102,7 @@ export function RecipeCard({ recipe, isSaved, onToggleFavourite, profile = null,
               <p className="text-sm leading-6">{step}</p>
             </div>
           ))}
+          <NutritionDisclaimer inline className="mt-4" />
         </div>
       ) : null}
     </article>

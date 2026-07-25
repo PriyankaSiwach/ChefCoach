@@ -32,12 +32,13 @@ import { useToast } from "./Toast";
 import { ScanCounter } from "./ScanCounter";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  deleteRemoteProfile,
   ensureProBypassForUser,
   isProSubscriptionActive,
+  pullProfileFromSupabase,
   upsertProfileToSupabase,
 } from "@/lib/profileSupabase";
 import { verifySubscriptionOnLaunch } from "@/lib/iap";
+import { redirectToLoginAfterAccountReset } from "@/lib/session";
 import { PaywallScreen } from "./PaywallScreen";
 import {
   isTrialExhausted,
@@ -46,10 +47,16 @@ import {
   resolveAuthEmail,
   isProBypassEmail,
 } from "@/lib/trial";
-import { RECIPIFY_PROFILE_STORAGE_KEY } from "@/lib/profileStorage";
+import {
+  defaultUserProfile,
+  readProfileFromStorage,
+  RECIPIFY_PROFILE_STORAGE_KEY,
+} from "@/lib/profileStorage";
+import { isOnboardingCompleteOnDevice, markOnboardingCompleteOnDevice } from "@/lib/onboardingGate";
 import { initReminderSync } from "@/lib/reminderNotifications";
 import { DashboardScreen } from "./DashboardScreen";
 import { DashboardEntryCard } from "./DashboardEntryCard";
+import { FoodTrackerTab } from "./FoodTrackerTab";
 
 const COOK_INITIAL_RECIPE_COUNT = 4;
 const COOK_MORE_RECIPE_COUNT = 2;
@@ -70,6 +77,8 @@ export function RecipifyApp() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ingredients, setIngredients] = useState<string[]>([]);
+  /** True when the user chose manual ingredient entry instead of (or without) a photo. */
+  const [manualEntryMode, setManualEntryMode] = useState(false);
   /** Cook tab: AI-generated recipes from scanned ingredients. */
   const [matchedRecipePool, setMatchedRecipePool] = useState<RecipeResultItem[]>([]);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -85,7 +94,7 @@ export function RecipifyApp() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [editProfileKey, setEditProfileKey] = useState(0);
-  const [activeTab, setActiveTab] = useState<"cook" | "saved" | "plan" | "profile">(
+  const [activeTab, setActiveTab] = useState<"cook" | "tracker" | "saved" | "plan" | "profile">(
     "cook"
   );
   const { favourites, toggleFavourite, clearFavourites } = useFavourites();
@@ -97,7 +106,7 @@ export function RecipifyApp() {
   const [celebrationQueue, setCelebrationQueue] = useState<AchievementUnlock[]>([]);
 
   const [gateChecked, setGateChecked] = useState(false);
-  const { user, signOut } = useAuth();
+  const { user, signOut, deleteAccount, isGuest, guestId } = useAuth();
 
   // Pro status is derived from the profile object (profile_data JSON in Supabase).
   // `isProSubscriptionActive` checks isPro flag AND subscription_expires_at.
@@ -113,6 +122,7 @@ export function RecipifyApp() {
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [profileMealNudge, setProfileMealNudge] = useState(false);
+  const [profileSyncAttempted, setProfileSyncAttempted] = useState(false);
 
   const suppressNextPopRef = useRef(false);
   const dashboardHistoryPushedRef = useRef(false);
@@ -190,7 +200,7 @@ export function RecipifyApp() {
   }, [popHistoryEntry]);
 
   const handleTabChange = useCallback(
-    (tab: "cook" | "saved" | "plan" | "profile") => {
+    (tab: "cook" | "tracker" | "saved" | "plan" | "profile") => {
       if (dashboardHistoryPushedRef.current) {
         dashboardHistoryPushedRef.current = false;
         setDashboardOpen(false);
@@ -223,6 +233,31 @@ export function RecipifyApp() {
     migrateTrialState();
     setGateChecked(true);
   }, []);
+
+  // Onboarding is done but profile state is null — recover or pull from cloud.
+  useEffect(() => {
+    if (!profileReady || profile) {
+      if (!user?.id) setProfileSyncAttempted(false);
+      return;
+    }
+    if (!isOnboardingCompleteOnDevice()) return;
+
+    const stored = readProfileFromStorage();
+    if (stored) {
+      setProfile(stored);
+      return;
+    }
+
+    if (isGuest || !user?.id) {
+      setProfile({ ...defaultUserProfile(), name: isGuest ? "Guest" : "" });
+      return;
+    }
+
+    setProfileSyncAttempted(false);
+    void pullProfileFromSupabase(user.id, resolveAuthEmail(user)).finally(() => {
+      setProfileSyncAttempted(true);
+    });
+  }, [profileReady, profile, isGuest, user, setProfile]);
 
   // Meal / water / streak reminders (local notifications when enabled)
   useEffect(() => {
@@ -322,15 +357,22 @@ export function RecipifyApp() {
     setError(null);
     if (img) {
       setIngredients([]);
+      setManualEntryMode(false);
       recordFridgeScan(img);
       return;
     }
     setIngredients([]);
   };
 
-  const onGenerate = async () => {
-    if (!currentImage) {
-      setError("Please upload a photo of your fridge first.");
+  /** Core generation logic. Accepts pre-parsed manual ingredients to avoid
+   *  React state-timing issues when the caller commits ingredients and generates
+   *  in the same event handler. */
+  const onGenerate = async (preloadedIngredients?: string[]) => {
+    const hasPhoto = Boolean(currentImage);
+    const hasManual = (preloadedIngredients?.length ?? 0) > 0 || ingredients.length > 0;
+
+    if (!hasPhoto && !hasManual) {
+      // Nothing to work with — no-op (user hasn't provided a photo or any ingredients)
       return;
     }
 
@@ -342,18 +384,28 @@ export function RecipifyApp() {
 
     setError(null);
     setLoading(true);
-    setLoadingPhase("scanning");
+    const manualOnly =
+      Boolean(preloadedIngredients?.length) ||
+      (!currentImage && ingredients.length > 0);
+    setLoadingPhase(manualOnly ? "generating" : "scanning");
     setMatchedRecipePool([]);
 
     try {
-      let detectedIngredients = ingredients;
+      // Use preloaded (manual) ingredients if provided, otherwise fall back to
+      // state (already-detected) ingredients, then scan the photo if neither exists.
+      let detectedIngredients = preloadedIngredients?.length
+        ? preloadedIngredients
+        : ingredients;
 
-      if (!detectedIngredients.length) {
+      if (!detectedIngredients.length && currentImage) {
         const base64 = currentImage.split(",")[1] ?? "";
         const mimeType = currentImage.split(";")[0]?.split(":")[1] || "image/jpeg";
         detectedIngredients = await detectFridgeIngredients(base64, mimeType, profile);
         if (!detectedIngredients.length) detectedIngredients = [...mockIngredients];
         setIngredients(detectedIngredients);
+      } else if (preloadedIngredients?.length) {
+        // Commit manual ingredients to state so the chip list is visible after results
+        setIngredients(preloadedIngredients);
       }
 
       setLoadingPhase("generating");
@@ -382,6 +434,12 @@ export function RecipifyApp() {
       setLoading(false);
       setLoadingPhase("idle");
     }
+  };
+
+  /** Called by the manual-entry form — receives parsed ingredients directly to
+   *  avoid React state-timing issues (setIngredients is async). */
+  const onGenerateWithIngredients = (manualIngredients: string[]) => {
+    void onGenerate(manualIngredients);
   };
 
   const onGenerateMore = async () => {
@@ -426,6 +484,15 @@ export function RecipifyApp() {
     }
   };
 
+  const handleDeleteAccount = async (): Promise<{ ok: boolean; error?: string }> => {
+    const result = await deleteAccount();
+    if (!result.ok) {
+      return result;
+    }
+    redirectToLoginAfterAccountReset();
+    return { ok: true };
+  };
+
   const logMeal = (recipe: Recipe) => {
     appendRecipeToDailyLog(recipe, profile);
     showToast(`Meal logged! ${recipe.calories} kcal added`, "success");
@@ -452,12 +519,23 @@ export function RecipifyApp() {
     return <div className="min-h-screen bg-[var(--cream)]" aria-busy />;
   }
 
-  /* Full onboarding only when no saved profile (first-time); returning users always have profile after hydrate */
-  if (!shouldSkipOnboarding && !profile) {
+  /* Signed-in user — wait for cloud profile sync before onboarding vs main app. */
+  if (user?.id && !isGuest && !profile && !profileSyncAttempted) {
+    return <div className="min-h-screen bg-[var(--cream)]" aria-busy aria-label="Loading profile" />;
+  }
+
+  /* New or returning user without a profile — onboarding (includes re-signup after delete). */
+  const needsProfileOnboarding =
+    !shouldSkipOnboarding &&
+    !profile &&
+    (!isOnboardingCompleteOnDevice() || (user?.id && !isGuest && profileSyncAttempted));
+
+  if (needsProfileOnboarding) {
     return (
       <OnboardingModal
-        initialProfile={profile}
+        initialProfile={null}
         onComplete={(nextProfile) => {
+          markOnboardingCompleteOnDevice();
           setProfile(nextProfile);
         }}
       />
@@ -472,6 +550,7 @@ export function RecipifyApp() {
 
   const tabLabels = {
     cook: "Cook",
+    tracker: "Track",
     saved: "Saved",
     plan: "Plan",
     profile: "Profile",
@@ -512,6 +591,15 @@ export function RecipifyApp() {
               onImageChange={onImageChange}
               loading={loading}
               loadingMessage={loadingMessage}
+              onAddManually={() => {
+                setManualEntryMode(true);
+                // Small delay so the ingredient section renders before scrolling
+                setTimeout(() => {
+                  document
+                    .getElementById("ingredients-section")
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }, 100);
+              }}
             />
           </div>
 
@@ -526,13 +614,13 @@ export function RecipifyApp() {
             />
           </div>
 
-          <div style={{ animation: "fadeInUp 0.5s ease both", animationDelay: "0.24s" }}>
+          <div id="ingredients-section" style={{ animation: "fadeInUp 0.5s ease both", animationDelay: "0.24s" }}>
             <RecipeResultsSection
               error={error}
               loading={loading}
               loadingMessage={loadingMessage}
               ingredients={ingredients}
-              hasUploadedPhoto={Boolean(currentImage)}
+              hasUploadedPhoto={Boolean(currentImage) || manualEntryMode}
               recipes={recipes}
               matchedRecipePoolCount={matchedRecipePool.length}
               favourites={favourites}
@@ -560,14 +648,19 @@ export function RecipifyApp() {
               onReset={() => {
                 onImageChange(null);
                 setError(null);
+                setManualEntryMode(false);
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}
               showTrialEndedBanner={showTrialEndedBanner}
               recipesLocked={recipesLocked}
               onUpgrade={openPaywall}
+              manualMode={manualEntryMode}
+              onGenerateWithIngredients={onGenerateWithIngredients}
             />
           </div>
         </main>
+      ) : activeTab === "tracker" ? (
+        <FoodTrackerTab profile={profile} />
       ) : activeTab === "saved" ? (
         <SavedRecipesSection
           favourites={favourites}
@@ -589,18 +682,8 @@ export function RecipifyApp() {
           />
         ) : (
           <section className="tab-page app-shell px-4 py-8">
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--white)] p-5">
-              <h2 className="font-playfair text-2xl text-[var(--green)]">Profile needed</h2>
-              <p className="mt-2 text-sm text-[var(--gray)]">
-                Complete onboarding to use meal planning and pantry tools.
-              </p>
-              <button
-                type="button"
-                className="mt-4 rounded-full bg-[var(--green)] px-4 py-2 text-sm text-white"
-                onClick={() => setShowOnboarding(true)}
-              >
-                Continue onboarding
-              </button>
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--white)] p-5 text-center">
+              <p className="text-sm text-[var(--gray)]">Loading your meal plan…</p>
             </div>
           </section>
         )
@@ -608,32 +691,21 @@ export function RecipifyApp() {
         profile ? (
           <ProfileTab
             profile={profile}
-            userEmail={user?.email ?? null}
+            userEmail={!isGuest ? resolveAuthEmail(user) : null}
             isPro={effectivePro}
+            isGuest={isGuest}
             onEditProfile={() => {
               setEditProfileKey((k) => k + 1);
               setShowEditProfile(true);
             }}
             onOpenPaywall={openPaywall}
             onLogout={() => void handleLogout()}
-            onDeleteRemoteProfile={
-              user?.id ? async () => deleteRemoteProfile(user.id) : undefined
-            }
+            onDeleteAccount={() => handleDeleteAccount()}
           />
         ) : (
           <section className="tab-page app-shell px-4 py-8">
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--white)] p-5">
-              <h2 className="font-playfair text-2xl text-[var(--green)]">Profile setup needed</h2>
-              <p className="mt-2 text-sm text-[var(--gray)]">
-                Complete onboarding to unlock your personalized targets and meal plan.
-              </p>
-              <button
-                type="button"
-                className="mt-4 rounded-full bg-[var(--green)] px-4 py-2 text-sm text-white"
-                onClick={() => setShowOnboarding(true)}
-              >
-                Continue onboarding
-              </button>
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--white)] p-5 text-center">
+              <p className="text-sm text-[var(--gray)]">Loading your profile…</p>
             </div>
           </section>
         )
@@ -668,9 +740,10 @@ export function RecipifyApp() {
         open={paywallOpen}
         onClose={() => setPaywallOpen(false)}
         onPurchaseSuccess={() => setPaywallOpen(false)}
-        appUserId={user?.id ?? null}
+        appUserId={user?.id ?? guestId ?? null}
         currentProfile={profile}
         setProfile={setProfile}
+        isGuest={isGuest}
       />
       {showEditProfile && profile ? (
         <EditProfileScreen

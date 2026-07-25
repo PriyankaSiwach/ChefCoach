@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { presentRevenueCatPaywall, restorePurchases } from "@/lib/revenueCat";
+import { purchaseProduct, restoreIAPPurchases, PRODUCT_YEARLY } from "@/lib/iap";
 import { useToast } from "@/components/Toast";
 
 type Props = {
@@ -18,7 +18,7 @@ export function UpgradeModal({ open, onClose, appUserId }: Props) {
   const handleRestore = async () => {
     setRestoring(true);
     try {
-      const result = await restorePurchases(appUserId);
+      const result = await restoreIAPPurchases(appUserId);
       if (result.ok) {
         showToast("✅ Purchases restored! You now have Pro access.", "success");
         onClose();
@@ -35,16 +35,20 @@ export function UpgradeModal({ open, onClose, appUserId }: Props) {
   const handleUpgrade = async () => {
     try {
       setLoading(true);
-      const result = await presentRevenueCatPaywall(appUserId);
+      const result = await purchaseProduct(PRODUCT_YEARLY, appUserId);
       if (!result.ok) {
         if (!result.userCancelled) {
-          alert(result.error);
+          showToast(result.error, "info");
         }
         return;
       }
+      showToast("✅ Welcome to ChefCoach Pro!", "success");
       onClose();
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Purchase could not be completed.");
+      showToast(
+        error instanceof Error ? error.message : "Purchase could not be completed.",
+        "info"
+      );
     } finally {
       setLoading(false);
     }

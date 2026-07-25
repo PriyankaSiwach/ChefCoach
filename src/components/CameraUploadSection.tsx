@@ -5,6 +5,7 @@ type Props = {
   onImageChange: (img: string | null) => void;
   loading: boolean;
   loadingMessage?: string;
+  onAddManually?: () => void;
 };
 
 export function CameraUploadSection({
@@ -12,6 +13,7 @@ export function CameraUploadSection({
   onImageChange,
   loading,
   loadingMessage,
+  onAddManually,
 }: Props) {
   return (
     <section className="app-shell px-4 pt-4 pb-2">
@@ -22,13 +24,14 @@ export function CameraUploadSection({
           </p>
           <h2 className="font-playfair text-xl text-[var(--green)]">Scan your fridge</h2>
         </div>
-        <p className="pb-0.5 text-[11px] text-[var(--gray)]">Photo → recipes</p>
+        <p className="pb-0.5 text-[11px] text-[var(--gray)]">Photo or list → recipes</p>
       </div>
       <UploadZone
         currentImage={currentImage}
         onImageChange={onImageChange}
         loading={loading}
         loadingMessage={loadingMessage}
+        onAddManually={onAddManually}
       />
     </section>
   );

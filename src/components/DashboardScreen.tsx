@@ -32,6 +32,7 @@ import {
   ZapIcon,
 } from "@/components/icons/AppIcons";
 import { Sprout } from "lucide-react";
+import { NutritionDisclaimer } from "@/components/NutritionDisclaimer";
 
 /** Stable day-of-year seed so the same meals show all day, different tomorrow. */
 function todayDayIndex(): number {
@@ -605,7 +606,7 @@ export function DashboardScreen({
         <span className="min-w-[72px] shrink-0" aria-hidden />
       </div>
       <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
-      <main className="app-shell w-full px-4 pb-6 pt-2">
+      <main className="app-shell tab-bar-clearance w-full px-4 pt-2">
       <section className="w-full min-w-0">
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[var(--green)] to-[var(--green-light)] p-4 text-[var(--cream)] sm:p-5">
           <div className="flex min-w-0 items-start gap-3 sm:gap-4">
@@ -618,7 +619,7 @@ export function DashboardScreen({
             ) : null}
             <div className="min-w-0 flex-1">
               <h1 className="text-wrap-safe font-playfair text-xl leading-snug sm:text-2xl">
-                {greeting}, {displayName}
+                {greeting}{displayName ? `, ${displayName}` : ""}!
               </h1>
               <p className="mt-1 text-sm text-[var(--cream)]/90">
                 Daily target: {plan.tdee.toLocaleString()} kcal
@@ -725,6 +726,8 @@ export function DashboardScreen({
             </div>
           ) : null}
 
+          <NutritionDisclaimer inline />
+
           <div>
             <h3 className="text-sm font-semibold uppercase tracking-[0.1em] text-[var(--gray)]">
               Today&apos;s meals logged
@@ -811,7 +814,7 @@ export function DashboardScreen({
                     "bg-[var(--orange)] text-white border-2 border-[var(--orange)] shadow-sm relative z-[1]";
                 } else {
                   circleClass +=
-                    "bg-[var(--green)] text-white border-2 border-[var(--green)] streak-week-today relative z-[1]";
+                    "bg-[var(--green-pale)] text-[var(--green-light)] border-2 border-[var(--green-light)] streak-week-today relative z-[1]";
                 }
               } else if (isPast) {
                 if (logged) {
@@ -836,7 +839,7 @@ export function DashboardScreen({
                   {isToday ? (
                     <span
                       className={`text-[9px] font-semibold uppercase ${
-                        logged ? "text-[var(--orange)]" : "text-[var(--green)]"
+                        logged ? "text-[var(--orange)]" : "text-[var(--green-light)]"
                       }`}
                     >
                       Today
@@ -851,30 +854,22 @@ export function DashboardScreen({
             })}
           </div>
         </div>
-      </section>
 
-      <section className="w-full pt-4">
-        <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--gray)]">Today&apos;s meal plan</h2>
-        <div className="mt-2 space-y-3">
-          {(["Breakfast", "Lunch", "Dinner"] as const).map((mealType) => (
-            <TodayMealCard
-              key={mealType}
-              meal={todayMeals[mealType]}
-              mealType={mealType}
-              userAllergens={(profile.allergies ?? []).filter((a) => a !== "None")}
-              onReplace={() => replaceMeal(mealType)}
-            />
-          ))}
-        </div>
-      </section>
+        <div className="mt-6 rounded-2xl border border-[var(--border)] bg-[var(--white)] p-4">
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+            <h3 className="flex min-w-0 items-center gap-2 font-playfair text-lg text-[var(--green)]">
+              <DropletsIcon className="h-5 w-5 shrink-0" />
+              <span>Water intake</span>
+            </h3>
+            <span className="shrink-0 rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-semibold text-sky-700">
+              {filledGlasses} / 8 glasses
+            </span>
+          </div>
 
-      <section className="w-full pt-4">
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--white)] p-4">
-          <h3 className="flex items-center gap-2 font-playfair text-lg text-[var(--green)]">
-            <DropletsIcon className="h-5 w-5" />
-            Water intake
-          </h3>
-          <div className="mt-4 grid grid-cols-8 gap-2">
+          <div
+            className="mt-4 grid gap-2"
+            style={{ gridTemplateColumns: "repeat(8, minmax(0, 1fr))" }}
+          >
             {water.map((isFilled, idx) => (
               <button
                 key={`water-${idx}`}
@@ -900,7 +895,7 @@ export function DashboardScreen({
                   }, 650);
                 }}
                 aria-label={`Toggle water glass ${idx + 1}`}
-                className={`relative flex h-8 w-8 shrink-0 items-center justify-center overflow-visible rounded-full border-2 text-base transition ${
+                className={`relative aspect-square w-full items-center justify-center overflow-visible rounded-full border-2 text-base transition flex ${
                   isFilled
                     ? "border-blue-600 bg-blue-600"
                     : "border-sky-300 bg-sky-100"
@@ -937,8 +932,32 @@ export function DashboardScreen({
               </button>
             ))}
           </div>
-          <p className="mt-3 text-sm font-medium text-[var(--text)]">{waterMotivation(filledGlasses)}</p>
-          <p className="mt-1 text-xs text-[var(--gray)]">{filledGlasses} of 8 glasses</p>
+
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-sky-100">
+            <div
+              className="h-full rounded-full bg-blue-500 transition-[width] duration-500"
+              style={{ width: `${(filledGlasses / 8) * 100}%` }}
+            />
+          </div>
+
+          <p className="mt-2 min-w-0 break-words text-sm font-medium text-[var(--text)]">
+            {waterMotivation(filledGlasses)}
+          </p>
+        </div>
+      </section>
+
+      <section className="w-full pt-4">
+        <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--gray)]">Today&apos;s meal plan</h2>
+        <div className="mt-2 space-y-3">
+          {(["Breakfast", "Lunch", "Dinner"] as const).map((mealType) => (
+            <TodayMealCard
+              key={mealType}
+              meal={todayMeals[mealType]}
+              mealType={mealType}
+              userAllergens={(profile.allergies ?? []).filter((a) => a !== "None")}
+              onReplace={() => replaceMeal(mealType)}
+            />
+          ))}
         </div>
       </section>
 

@@ -5,7 +5,11 @@ const config: CapacitorConfig = {
   appName: "ChefCoach",
   webDir: "dist",
   ios: {
-    contentInset: "automatic",
+    // "never" — the web app handles all safe-area insets via CSS env() and
+    // viewport-fit=cover. Using "automatic" causes WKWebView to shrink the
+    // renderable area for safe zones, conflicting with the CSS env() values
+    // and making content appear wider than the screen.
+    contentInset: "never",
     preferredContentMode: "mobile",
     minVersion: "16.0",
   },
@@ -19,7 +23,10 @@ const config: CapacitorConfig = {
      */
     Camera: {
       // NSCameraUsageDescription
-      iosText: "ChefCoach uses your camera to scan fridge contents and identify ingredients.",
+      iosText: "ChefCoach uses your camera to scan fridge contents, ingredients, and meals for nutrition tracking.",
+    },
+    PushNotifications: {
+      presentationOptions: ["badge", "sound", "alert"],
     },
     // NSPhotoLibraryUsageDescription is set via the plist entry below.
     // Capacitor writes plugin-level strings; for photo library we use the

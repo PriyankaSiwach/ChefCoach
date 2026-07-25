@@ -95,6 +95,31 @@ function coerceCookingSkill(raw: unknown): CookingSkill | undefined {
   return undefined;
 }
 
+/** Defaults used when weight/height are not provided (optional fields). */
+export const CALORIE_DEFAULT_WEIGHT_KG = 70;
+export const CALORIE_DEFAULT_HEIGHT_CM = 170;
+export const CALORIE_DEFAULT_AGE = 30;
+
+export function bodyMetricsForCalories(profile: {
+  weightKg?: number;
+  heightCm?: number;
+  age?: number;
+  sex?: UserProfile["sex"];
+}): { weightKg: number; heightCm: number; age: number; sex: UserProfile["sex"] } {
+  return {
+    weightKg:
+      profile.weightKg && profile.weightKg > 0
+        ? profile.weightKg
+        : CALORIE_DEFAULT_WEIGHT_KG,
+    heightCm:
+      profile.heightCm && profile.heightCm > 0
+        ? profile.heightCm
+        : CALORIE_DEFAULT_HEIGHT_CM,
+    age: profile.age && profile.age > 0 ? profile.age : CALORIE_DEFAULT_AGE,
+    sex: profile.sex ?? "female",
+  };
+}
+
 export function defaultUserProfile(): UserProfile {
   return {
     name: "",

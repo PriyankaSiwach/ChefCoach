@@ -2,6 +2,7 @@ import type { UserProfile } from "@/types";
 import { supabase } from "@/lib/supabaseClient";
 import { isProBypassEmail, resolveAuthEmail } from "@/lib/trial";
 import { isProSubscriptionActive, normalizeUserProfile, RECIPIFY_PROFILE_STORAGE_KEY } from "@/lib/profileStorage";
+import { markOnboardingCompleteOnDevice } from "@/lib/onboardingGate";
 
 // ─── Subscription / Pro status ────────────────────────────────────────────────
 // Subscription fields (isPro, freeScansUsed, subscriptionExpiresAt) are stored
@@ -108,11 +109,82 @@ export async function ensureProBypassForUser(
   await setProStatus(userId, true, null);
 }
 
-/** Pull `profiles.profile_data` into localStorage and notify listeners. */
-export async function pullProfileFromSupabase(
+function readLocalProfile(): UserProfile | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(RECIPIFY_PROFILE_STORAGE_KEY);
+    if (!raw) return null;
+    return normalizeUserProfile(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+function isEmptyRemoteProfile(raw: unknown): boolean {
+  return (
+    raw == null ||
+    (typeof raw === "object" && raw !== null && Object.keys(raw as object).length === 0)
+  );
+}
+
+/** Merge guest/local onboarding data with an existing cloud profile without losing either. */
+function mergeProfiles(local: UserProfile, remote: UserProfile): UserProfile {
+  const localPro = isProSubscriptionActive(local);
+  const remotePro = isProSubscriptionActive(remote);
+  const localScans =
+    typeof local.freeScansUsed === "number" ? Math.max(0, local.freeScansUsed) : 0;
+  const remoteScans =
+    typeof remote.freeScansUsed === "number" ? Math.max(0, remote.freeScansUsed) : 0;
+
+  return {
+    ...remote,
+    ...local,
+    // Keep the best subscription state from either source
+    isPro: localPro || remotePro,
+    subscriptionExpiresAt:
+      localPro && !remotePro
+        ? local.subscriptionExpiresAt ?? null
+        : remote.subscriptionExpiresAt ?? local.subscriptionExpiresAt ?? null,
+    freeScansUsed: Math.max(localScans, remoteScans),
+    // Prefer a real name over the guest placeholder
+    name:
+      (local.name?.trim() && local.name.trim() !== "Guest"
+        ? local.name.trim()
+        : "") ||
+      remote.name?.trim() ||
+      local.name?.trim() ||
+      "",
+  };
+}
+
+function saveLocalProfile(profile: UserProfile, email?: string | null): UserProfile {
+  const authEmail = email ?? resolveAuthEmail(null);
+  const profileToSave = isProBypassEmail(authEmail)
+    ? { ...profile, isPro: true, subscriptionExpiresAt: null }
+    : profile;
+
+  try {
+    window.localStorage.setItem(
+      RECIPIFY_PROFILE_STORAGE_KEY,
+      JSON.stringify(profileToSave)
+    );
+  } catch {
+    /* ignore */
+  }
+  window.dispatchEvent(new CustomEvent("recipify-profile-sync"));
+  return profileToSave;
+}
+
+/**
+ * After sign-in: merge locally saved onboarding (guest or pre-auth) with the
+ * cloud profile, upsert to Supabase, and refresh localStorage.
+ */
+export async function syncProfileAfterAuth(
   userId: string,
   email?: string | null
 ): Promise<void> {
+  const local = readLocalProfile();
+
   const { data, error } = await supabase
     .from("profiles")
     .select("profile_data")
@@ -121,42 +193,58 @@ export async function pullProfileFromSupabase(
 
   if (error) {
     console.warn("Supabase profile fetch:", error.message);
-    return;
-  }
-
-  const raw = data?.profile_data;
-  if (raw == null || (typeof raw === "object" && raw !== null && Object.keys(raw as object).length === 0)) {
-    try {
-      window.localStorage.removeItem(RECIPIFY_PROFILE_STORAGE_KEY);
-    } catch {
-      /* ignore */
+    if (local) {
+      await upsertProfileToSupabase(userId, local);
+      saveLocalProfile(local, email);
     }
+    return;
+  }
+
+  const rawRemote = data?.profile_data;
+
+  // Cloud empty — push local guest/onboarding profile up
+  if (isEmptyRemoteProfile(rawRemote)) {
+    if (local) {
+      const saved = saveLocalProfile(local, email);
+      await upsertProfileToSupabase(userId, saved);
+      markOnboardingCompleteOnDevice();
+      if (isProBypassEmail(email ?? resolveAuthEmail(null))) {
+        await setProStatus(userId, true, null);
+      }
+    } else {
+      try {
+        window.localStorage.removeItem(RECIPIFY_PROFILE_STORAGE_KEY);
+      } catch {
+        /* ignore */
+      }
+      window.dispatchEvent(new CustomEvent("recipify-profile-sync"));
+    }
+    return;
+  }
+
+  const remote = normalizeUserProfile(rawRemote);
+  if (!remote) {
     window.dispatchEvent(new CustomEvent("recipify-profile-sync"));
     return;
   }
 
-  const normalized = normalizeUserProfile(raw);
-  if (!normalized) {
-    window.dispatchEvent(new CustomEvent("recipify-profile-sync"));
-    return;
-  }
+  // Both exist — merge so guest onboarding answers are not lost
+  const merged = local ? mergeProfiles(local, remote) : remote;
+  const saved = saveLocalProfile(merged, email);
+  await upsertProfileToSupabase(userId, saved);
+  markOnboardingCompleteOnDevice();
 
-  const authEmail = email ?? resolveAuthEmail(null);
-  const profileToSave =
-    isProBypassEmail(authEmail)
-      ? { ...normalized, isPro: true, subscriptionExpiresAt: null }
-      : normalized;
-
-  try {
-    window.localStorage.setItem(RECIPIFY_PROFILE_STORAGE_KEY, JSON.stringify(profileToSave));
-  } catch {
-    /* ignore */
-  }
-  window.dispatchEvent(new CustomEvent("recipify-profile-sync"));
-
-  if (isProBypassEmail(authEmail)) {
+  if (isProBypassEmail(email ?? resolveAuthEmail(null))) {
     await setProStatus(userId, true, null);
   }
+}
+
+/** Pull `profiles.profile_data` into localStorage and notify listeners. */
+export async function pullProfileFromSupabase(
+  userId: string,
+  email?: string | null
+): Promise<void> {
+  await syncProfileAfterAuth(userId, email);
 }
 
 export async function upsertProfileToSupabase(

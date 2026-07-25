@@ -17,11 +17,11 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  purchaseProduct,
+  purchasePackage,
   restoreIAPPurchases,
   fetchOfferingsSafe,
-  PRODUCT_MONTHLY,
-  PRODUCT_YEARLY,
+  EMPTY_OFFERINGS,
+  type OfferingsState,
 } from "@/lib/iap";
 import { useToast } from "@/components/Toast";
 import { APP_NAME } from "@/lib/brand";
@@ -51,6 +51,8 @@ type Props = {
   /** Pass current profile so iap.ts can patch it in-place after purchase. */
   currentProfile: UserProfile | null;
   setProfile: (p: UserProfile) => void;
+  /** True when the user is browsing as a guest (no Supabase session). */
+  isGuest?: boolean;
 };
 
 const FEATURES: Array<{ Icon: FeatureIcon; text: string }> = [
@@ -70,13 +72,25 @@ export function PaywallScreen({
   appUserId,
   currentProfile,
   setProfile,
+  isGuest = false,
 }: Props) {
   const [selectedPlan, setSelectedPlan] = useState<Plan>("yearly");
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [showGuestAccountNudge, setShowGuestAccountNudge] = useState(false);
   const [offeringsLoading, setOfferingsLoading] = useState(false);
+  const [offerings, setOfferings] = useState<OfferingsState>(EMPTY_OFFERINGS);
   const showToast = useToast();
   const navigate = useNavigate();
+
+  const loadOfferings = () => {
+    setOfferingsLoading(true);
+    return fetchOfferingsSafe(appUserId).then((result) => {
+      setOfferings(result);
+      setOfferingsLoading(false);
+      return result;
+    });
+  };
 
   useEffect(() => {
     if (!open) {
@@ -86,8 +100,9 @@ export function PaywallScreen({
 
     let cancelled = false;
     setOfferingsLoading(true);
-    void fetchOfferingsSafe(appUserId).then(() => {
+    void fetchOfferingsSafe(appUserId).then((result) => {
       if (cancelled) return;
+      setOfferings(result);
       setOfferingsLoading(false);
     });
 
@@ -98,13 +113,34 @@ export function PaywallScreen({
 
   if (!open) return null;
 
+  const selectedPackage =
+    selectedPlan === "yearly" ? offerings.yearlyPackage : offerings.monthlyPackage;
+  const monthlyPrice = offerings.monthlyPrice ?? "$7.99";
+  const yearlyPrice = offerings.yearlyPrice ?? "$59.99";
+  const yearlyPerMonth = offerings.yearlyPerMonthPrice ?? "$5.00";
+
   const handleSubscribe = async () => {
+    if (!selectedPackage) {
+      showToast(
+        offerings.warning ?? "Subscription plans are not available right now.",
+        "info"
+      );
+      return;
+    }
+
     setLoading(true);
     try {
-      const productId = selectedPlan === "yearly" ? PRODUCT_YEARLY : PRODUCT_MONTHLY;
-      const result = await purchaseProduct(productId, appUserId, currentProfile, setProfile);
+      const result = await purchasePackage(
+        selectedPackage,
+        appUserId,
+        currentProfile,
+        setProfile
+      );
       if (result.ok) {
         showToast(`🎉 Welcome to ${APP_NAME} Pro!`, "success");
+        if (isGuest) {
+          setShowGuestAccountNudge(true);
+        }
         onPurchaseSuccess();
       } else if (!result.userCancelled) {
         showToast(result.error, "info");
@@ -137,7 +173,7 @@ export function PaywallScreen({
   };
 
   const busy = loading || restoring || offeringsLoading;
-  const canPurchase = !offeringsLoading;
+  const canPurchase = offerings.available && !!selectedPackage && !offeringsLoading;
 
   return (
     <div
@@ -189,6 +225,20 @@ export function PaywallScreen({
           ))}
         </ul>
 
+        {/* Offerings warning */}
+        {offerings.warning && !offeringsLoading ? (
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-relaxed text-amber-900">
+            {offerings.warning}
+            <button
+              type="button"
+              onClick={() => void loadOfferings()}
+              className="mt-2 block font-medium text-[var(--green)] underline underline-offset-2"
+            >
+              Retry loading plans
+            </button>
+          </div>
+        ) : null}
+
         {/* Plan selector */}
         <div className="mb-4 grid grid-cols-2 gap-3">
 
@@ -206,16 +256,17 @@ export function PaywallScreen({
             <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full bg-[var(--orange)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
               Save 37%
             </span>
-            <span className={`mt-1 text-xs font-semibold uppercase tracking-wide ${selectedPlan === "yearly" ? "text-[var(--green)]" : "text-[var(--gray)]"}`}>
+            <span className={`mt-1 text-[11px] font-bold uppercase tracking-wide ${selectedPlan === "yearly" ? "text-[var(--green)]" : "text-[var(--gray)]"}`}>
+              {APP_NAME} Pro
+            </span>
+            <span className={`text-xs font-semibold ${selectedPlan === "yearly" ? "text-[var(--green)]" : "text-[var(--gray)]"}`}>
               Yearly
             </span>
             <span className={`mt-1 text-xl font-bold ${selectedPlan === "yearly" ? "text-[var(--green)]" : "text-[var(--text)]"}`}>
-              $59.99
+              {yearlyPrice}
             </span>
-            <span className="text-[11px] text-[var(--gray)]">per year · $5.00/mo</span>
-            <span className="mt-1 text-[10px] text-[var(--gray)]">
-              {PRODUCT_YEARLY}
-            </span>
+            <span className="text-[11px] text-[var(--gray)]">per year</span>
+            <span className="text-[11px] font-medium text-[var(--green)]">{yearlyPerMonth} / month</span>
             {selectedPlan === "yearly" && (
               <span className="mt-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--green)] text-[10px] text-white">✓</span>
             )}
@@ -232,16 +283,16 @@ export function PaywallScreen({
                 : "border-[var(--border)] bg-[var(--gray-light)]/40"
             }`}
           >
-            <span className={`text-xs font-semibold uppercase tracking-wide ${selectedPlan === "monthly" ? "text-[var(--green)]" : "text-[var(--gray)]"}`}>
+            <span className={`text-[11px] font-bold uppercase tracking-wide ${selectedPlan === "monthly" ? "text-[var(--green)]" : "text-[var(--gray)]"}`}>
+              {APP_NAME} Pro
+            </span>
+            <span className={`text-xs font-semibold ${selectedPlan === "monthly" ? "text-[var(--green)]" : "text-[var(--gray)]"}`}>
               Monthly
             </span>
             <span className={`mt-1 text-xl font-bold ${selectedPlan === "monthly" ? "text-[var(--green)]" : "text-[var(--text)]"}`}>
-              $7.99
+              {monthlyPrice}
             </span>
             <span className="text-[11px] text-[var(--gray)]">per month</span>
-            <span className="mt-1 text-[10px] text-[var(--gray)]">
-              {PRODUCT_MONTHLY}
-            </span>
             {selectedPlan === "monthly" && (
               <span className="mt-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--green)] text-[10px] text-white">✓</span>
             )}
@@ -257,16 +308,19 @@ export function PaywallScreen({
         >
           {loading
             ? "Opening purchase…"
-            : !canPurchase
-              ? "Purchases unavailable"
-              : selectedPlan === "yearly"
-                ? "Subscribe — $59.99 / year"
-                : "Subscribe — $7.99 / month"}
+            : offeringsLoading
+              ? "Loading plans…"
+              : !canPurchase
+                ? "Purchases unavailable"
+                : selectedPlan === "yearly"
+                  ? `Subscribe — ${yearlyPrice} / year`
+                  : `Subscribe — ${monthlyPrice} / month`}
         </button>
 
-        <p className="mt-2 text-center text-[11px] text-[var(--gray)]">
-          Billed via Apple In-App Purchase. Cancel anytime in{" "}
-          <span className="font-medium">Settings → Subscriptions</span>.
+        <p className="mt-2 text-center text-[11px] leading-relaxed text-[var(--gray)]">
+          Auto-renewable subscription. Billed via Apple In-App Purchase.{" "}
+          Subscription automatically renews unless cancelled at least 24 hours before the end of the current period.{" "}
+          Cancel anytime in <span className="font-medium">Settings → Subscriptions</span>.
         </p>
 
         {/* Restore */}
@@ -279,14 +333,47 @@ export function PaywallScreen({
           {restoring ? "Restoring…" : "Restore Purchases"}
         </button>
 
-        {/* Legal */}
+        {/* Guest post-purchase nudge — optional account creation */}
+        {showGuestAccountNudge && (
+          <div className="mt-4 rounded-2xl border border-[var(--green)]/30 bg-[var(--green-pale)] px-4 py-3">
+            <p className="text-sm font-semibold text-[var(--green)]">
+              Your Pro access is active! 🎉
+            </p>
+            <p className="mt-1 text-xs text-[var(--gray)]">
+              Create a free account to sync your subscription and saved recipes across all your devices.
+            </p>
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={() => { onClose(); navigate("/login", { replace: true }); }}
+                className="flex-1 rounded-full bg-[var(--green)] py-2 text-xs font-semibold text-white"
+              >
+                Create account
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowGuestAccountNudge(false)}
+                className="flex-1 rounded-full border border-[var(--border)] py-2 text-xs text-[var(--gray)]"
+              >
+                Maybe later
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Legal — Apple requires functional links to Privacy Policy + EULA */}
         <div className="mt-5 flex items-center justify-center gap-4 text-[11px] text-[var(--gray)]">
           <button
             type="button"
-            onClick={() => navigate("/terms")}
+            onClick={() =>
+              window.open(
+                "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+                "_system"
+              )
+            }
             className="underline underline-offset-2"
           >
-            Terms of Service
+            Terms of Use (EULA)
           </button>
           <span aria-hidden>·</span>
           <button

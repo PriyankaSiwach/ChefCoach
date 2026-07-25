@@ -8,10 +8,13 @@ import {
   IconLabel,
   UserIcon,
 } from "@/components/icons/AppIcons";
+import { TrackerTabIcon } from "@/components/icons/TabIcons";
+
+type HeaderTab = "cook" | "tracker" | "saved" | "plan" | "profile";
 
 type Props = {
-  activeTab: "cook" | "saved" | "plan" | "profile";
-  onTabChange: (tab: "cook" | "saved" | "plan" | "profile") => void;
+  activeTab: HeaderTab;
+  onTabChange: (tab: HeaderTab) => void;
   favouritesCount: number;
   /** Saved profile photo — shown on Profile nav control when set */
   profileAvatarDataUri?: string;
@@ -30,7 +33,7 @@ export function Header({
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full max-w-[100vw] overflow-x-clip bg-[var(--green)] pt-[env(safe-area-inset-top,0px)]">
+      <header className="sticky top-0 z-50 w-full max-w-[100vw] overflow-x-hidden bg-[var(--green)] pt-[env(safe-area-inset-top,0px)]">
         <div className="app-shell flex items-center justify-between px-4 py-3">
           <BrandLogo className="min-w-0 shrink-0" />
           <button
@@ -49,6 +52,12 @@ export function Header({
             onClick={() => onTabChange("cook")}
           >
             <IconLabel icon={<ChefHatIcon />}>Cook</IconLabel>
+          </button>
+          <button
+            className={`${base} ${activeTab === "tracker" ? active : ""}`}
+            onClick={() => onTabChange("tracker")}
+          >
+            <IconLabel icon={<TrackerTabIcon active={activeTab === "tracker"} />}>Track</IconLabel>
           </button>
           <button
             className={`${base} ${activeTab === "saved" ? active : ""}`}
@@ -99,6 +108,16 @@ export function Header({
                 className="w-full rounded-2xl border border-[var(--border)] px-4 py-3 text-left text-sm"
               >
                 <IconLabel icon={<ChefHatIcon />}>Cook</IconLabel>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onTabChange("tracker");
+                  setOpenMobileMenu(false);
+                }}
+                className="w-full rounded-2xl border border-[var(--border)] px-4 py-3 text-left text-sm"
+              >
+                <IconLabel icon={<TrackerTabIcon active={activeTab === "tracker"} />}>Track</IconLabel>
               </button>
               <button
                 type="button"

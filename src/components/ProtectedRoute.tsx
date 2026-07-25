@@ -2,7 +2,7 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
 export function ProtectedRoute() {
-  const { session, initializing } = useAuth();
+  const { session, initializing, isGuest } = useAuth();
   const location = useLocation();
 
   if (initializing) {
@@ -18,7 +18,8 @@ export function ProtectedRoute() {
     );
   }
 
-  if (!session) {
+  // Allow through if the user has a real session OR is browsing as a guest
+  if (!session && !isGuest) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 

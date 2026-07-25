@@ -18,7 +18,7 @@ export function TermsOfServicePage() {
   const navigate = useNavigate();
 
   return (
-    <main className="min-h-screen bg-[var(--cream)] px-6 py-10">
+    <main className="page-safe min-h-screen bg-[var(--cream)]">
       <div className="mx-auto max-w-[720px]">
         {/* Back navigation */}
         <button

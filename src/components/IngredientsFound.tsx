@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SparklesIcon } from "@/components/icons/AppIcons";
 
 function ingredientAllergenWarning(
@@ -52,6 +52,11 @@ type Props = {
   onGenerateRecipes: () => void;
   /** Highlight chips that conflict with onboarding allergies */
   userAllergens?: string[];
+  /** When true, show textarea-based manual entry (no photo required). */
+  manualMode?: boolean;
+  /** Receives the parsed ingredient list directly — avoids React state-timing
+   *  issues when ingredients and generation are triggered in the same handler. */
+  onGenerateWithIngredients?: (ingredients: string[]) => void;
 };
 
 export function IngredientsFound({
@@ -63,11 +68,16 @@ export function IngredientsFound({
   onAddIngredient,
   onGenerateRecipes,
   userAllergens = [],
+  manualMode = false,
+  onGenerateWithIngredients,
 }: Props) {
   const [draftIngredient, setDraftIngredient] = useState("");
   const [sparkleTick, setSparkleTick] = useState(0);
   const [clickTick, setClickTick] = useState(0);
   const [ripple, setRipple] = useState<{ x: number; y: number; key: number } | null>(null);
+  // Manual-entry textarea state
+  const [manualText, setManualText] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (!clickTick) return;
@@ -75,7 +85,75 @@ export function IngredientsFound({
     return () => window.clearTimeout(id);
   }, [clickTick]);
 
-  if (!hasUploadedPhoto && !ingredients.length) return null;
+  // Auto-focus the textarea when entering manual mode
+  useEffect(() => {
+    if (manualMode && ingredients.length === 0) {
+      setTimeout(() => textareaRef.current?.focus(), 150);
+    }
+  }, [manualMode, ingredients.length]);
+
+  if (!hasUploadedPhoto && !ingredients.length && !manualMode) return null;
+
+  /** Parse textarea text → string array (comma or newline separated). */
+  const parseManualText = () =>
+    manualText
+      .split(/[\n,]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+  const submitManual = () => {
+    const parsed = parseManualText();
+    if (!parsed.length) return;
+    // Pass parsed ingredients directly to avoid React state-timing issues —
+    // setIngredients is async so reading `ingredients` immediately after would
+    // return the stale empty array.
+    if (onGenerateWithIngredients) {
+      onGenerateWithIngredients(parsed);
+    } else {
+      parsed.forEach((ing) => onAddIngredient(ing));
+      onGenerateRecipes();
+    }
+    setManualText("");
+  };
+
+  // ── Manual entry form (photo optional — same AI recipe path as scan) ──
+  if (manualMode && ingredients.length === 0) {
+    return (
+      <section className="app-shell mb-4 px-4">
+        <div className="rounded-2xl border border-[var(--border)] bg-[var(--white)] p-5 shadow-sm">
+          <h4 className="font-playfair text-lg text-[var(--green)]">Add your ingredients</h4>
+          <p className="mt-1 text-xs text-[var(--gray)]">
+            List what you have — separate by comma or one per line.
+          </p>
+          <textarea
+            ref={textareaRef}
+            value={manualText}
+            onChange={(e) => setManualText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                submitManual();
+              }
+            }}
+            className="mt-3 w-full resize-none rounded-xl border border-[var(--border)] bg-[var(--cream)] px-4 py-3 text-sm leading-relaxed outline-none transition focus:border-[var(--green)] focus:ring-2 focus:ring-[var(--green)]/20"
+            rows={5}
+            placeholder={"eggs, spinach, chicken breast, garlic\nrice, olive oil, tomatoes"}
+          />
+          <p className="mt-1.5 text-[11px] text-[var(--gray)]">
+            e.g. &quot;eggs, milk, spinach&quot; or one ingredient per line
+          </p>
+          <button
+            type="button"
+            disabled={loading || !manualText.trim()}
+            onClick={submitManual}
+            className="mt-4 w-full rounded-full bg-[var(--green)] py-3 font-playfair text-lg text-white shadow-[0_4px_14px_rgba(45,80,22,0.22)] transition hover:brightness-110 disabled:opacity-50"
+          >
+            {loading ? (loadingMessage ?? "Finding recipes…") : "Find Matching Recipes"}
+          </button>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="app-shell mb-4 px-4">

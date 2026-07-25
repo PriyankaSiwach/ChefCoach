@@ -5,6 +5,7 @@ import {
   getStreakDisplay,
   readDailyLog,
 } from "@/lib/gamification";
+import { bodyMetricsForCalories } from "@/lib/profileStorage";
 
 const activityMult: Record<UserProfile["activityLevel"], number> = {
   sedentary: 1.2,
@@ -14,12 +15,13 @@ const activityMult: Record<UserProfile["activityLevel"], number> = {
 };
 
 function computeDailyCalorieTarget(profile: UserProfile): number {
+  const { weightKg, heightCm, age, sex } = bodyMetricsForCalories(profile);
   const bmr =
-    profile.sex === "male"
-      ? 10 * profile.weightKg + 6.25 * profile.heightCm - 5 * profile.age + 5
-      : profile.sex === "female"
-        ? 10 * profile.weightKg + 6.25 * profile.heightCm - 5 * profile.age - 161
-        : 10 * profile.weightKg + 6.25 * profile.heightCm - 5 * profile.age;
+    sex === "male"
+      ? 10 * weightKg + 6.25 * heightCm - 5 * age + 5
+      : sex === "female"
+        ? 10 * weightKg + 6.25 * heightCm - 5 * age - 161
+        : 10 * weightKg + 6.25 * heightCm - 5 * age;
 
   let calories = Math.round(bmr * activityMult[profile.activityLevel]);
   if (profile.goal === "lose_weight") calories -= 300;
@@ -58,11 +60,19 @@ export function DashboardEntryCard({ profile, onOpen }: Props) {
     <button
       type="button"
       onClick={onOpen}
-      className="group w-full overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--white)] text-left shadow-[0_4px_24px_rgba(45,80,22,0.07)] transition hover:border-[var(--green)]/25 hover:shadow-[0_8px_32px_rgba(45,80,22,0.12)] active:scale-[0.99]"
+      className="dashboard-entry-card group relative w-full overflow-hidden rounded-3xl border-2 border-[var(--green-light)]/60 bg-[var(--white)] text-left transition active:scale-[0.99]"
     >
-      <div className="bg-gradient-to-br from-[var(--green-pale)]/80 via-[var(--white)] to-[var(--white)] px-4 pb-3.5 pt-4">
+      <span
+        className="dashboard-entry-card__shimmer pointer-events-none absolute inset-0 z-0 bg-gradient-to-r from-transparent via-white/50 to-transparent"
+        aria-hidden
+      />
+      <div className="relative z-[1] bg-gradient-to-br from-[var(--green-pale)] via-[#eef6e4] to-[var(--white)] px-4 pb-3.5 pt-4">
+        <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-[var(--green)]/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--green)]">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--green-light)]" aria-hidden />
+          Your daily hub
+        </div>
         <div className="flex items-start gap-3.5">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--green)] to-[var(--green-light)] text-white shadow-[0_4px_12px_rgba(45,80,22,0.25)]">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--green)] to-[var(--green-light)] text-white shadow-[0_4px_16px_rgba(45,80,22,0.3)] transition group-hover:scale-105">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
               <path
                 d="M4 19V5a1 1 0 011-1h5l2 2h7a1 1 0 011 1v12a1 1 0 01-1 1H5a1 1 0 01-1-1z"
@@ -87,7 +97,7 @@ export function DashboardEntryCard({ profile, onOpen }: Props) {
             </span>
           </span>
           <span
-            className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--green-pale)] text-[var(--green)] transition group-hover:bg-[var(--green)] group-hover:text-white"
+            className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--green)] text-white shadow-sm transition group-hover:bg-[var(--green-light)]"
             aria-hidden
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -103,7 +113,7 @@ export function DashboardEntryCard({ profile, onOpen }: Props) {
         </div>
       </div>
 
-      <div className="border-t border-[var(--border)]/70 px-4 py-3">
+      <div className="relative z-[1] border-t border-[var(--green-light)]/30 bg-gradient-to-b from-[var(--green-pale)]/40 to-[var(--white)] px-4 py-3">
         <div className="flex items-center justify-between gap-3 text-[11px] font-medium text-[var(--gray)]">
           <span className="inline-flex items-center gap-1.5">
             {streak.count > 0 ? (
@@ -115,7 +125,7 @@ export function DashboardEntryCard({ profile, onOpen }: Props) {
               <span>Start your streak today</span>
             )}
           </span>
-          <span className="tabular-nums text-[var(--text)]">
+          <span className="tabular-nums font-semibold text-[var(--green)]">
             {log.calories.toLocaleString()} / {target.toLocaleString()} kcal
           </span>
         </div>
@@ -128,7 +138,7 @@ export function DashboardEntryCard({ profile, onOpen }: Props) {
           aria-label="Daily calorie progress"
         >
           <div
-            className="h-full rounded-full bg-gradient-to-r from-[var(--green)] to-[var(--green-light)] transition-[width] duration-500"
+            className="h-full rounded-full bg-gradient-to-r from-[var(--green)] via-[var(--green-light)] to-[#a8d46f] transition-[width] duration-500"
             style={{ width: `${Math.round(progress * 100)}%` }}
           />
         </div>

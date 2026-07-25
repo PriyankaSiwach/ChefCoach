@@ -2,7 +2,11 @@ import { createClient } from "@supabase/supabase-js";
 
 function envConfig() {
   const url = (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "").trim();
-  const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  const serviceKey = (
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
+    ""
+  ).trim();
   return { url: url.replace(/\/$/, ""), serviceKey };
 }
 

@@ -51,6 +51,8 @@ type Props = {
   showTrialEndedBanner?: boolean;
   recipesLocked?: boolean;
   onUpgrade?: () => void;
+  manualMode?: boolean;
+  onGenerateWithIngredients?: (ingredients: string[]) => void;
 };
 
 export function RecipeResultsSection({
@@ -75,6 +77,8 @@ export function RecipeResultsSection({
   showTrialEndedBanner = false,
   recipesLocked = false,
   onUpgrade,
+  manualMode = false,
+  onGenerateWithIngredients,
 }: Props) {
   const bestMatch = recipes.length > 0 ? computeBestMatchRecipe(recipes, profile?.goal) : null;
 
@@ -82,7 +86,7 @@ export function RecipeResultsSection({
     <>
       {error ? (
         <div className="app-shell mb-4 px-4">
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             {error}
           </div>
         </div>
@@ -97,12 +101,14 @@ export function RecipeResultsSection({
         onAddIngredient={onAddIngredient}
         onGenerateRecipes={onGenerateRecipes}
         userAllergens={(profile?.allergies ?? []).filter((a) => a !== "None")}
+        manualMode={manualMode}
+        onGenerateWithIngredients={onGenerateWithIngredients}
       />
 
       <section className="app-shell px-4 pb-4">
         {matchedRecipePoolCount > 0 && recipes.length > 0 ? (
           <p className="mb-3 rounded-lg border border-[var(--green)]/30 bg-[var(--green-pale)]/60 px-3 py-2 text-xs text-[var(--green)]">
-            AI recipes tailored to your scanned ingredients — adjust diet and cook time filters above to refine results.
+            AI recipes tailored to your ingredients — adjust diet and cook time filters above to refine results.
           </p>
         ) : null}
         {matchedRecipePoolCount > 0 && recipes.length === 0 && ingredients.length > 0 ? (
@@ -116,9 +122,9 @@ export function RecipeResultsSection({
             <h2 className="font-playfair text-2xl text-[var(--green)]">Your Recipes</h2>
             <button
               onClick={onReset}
-              className="rounded-full border border-[var(--border)] px-4 py-2 text-xs text-[var(--gray)]"
+              className="rounded-full border border-[var(--border)] px-4 py-2 text-xs text-[var(--gray)] hover:border-[var(--green)]/40 hover:text-[var(--green)] transition"
             >
-              Try Again
+              Clear & rescan
             </button>
           </div>
         ) : null}

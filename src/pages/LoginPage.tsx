@@ -12,11 +12,13 @@ import {
   signupErrorMessage,
   SIGNUP_SUCCESS_HINT,
 } from "@/lib/authErrors";
+import { markOnboardingCompleteOnDevice } from "@/lib/onboardingGate";
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_SECONDS = 60;
 const LAST_EMAIL_KEY = "recipify_last_login_email";
 const BIOMETRIC_KEY = "recipify_biometric_eligible";
+const isNative = Capacitor.isNativePlatform();
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -83,10 +85,18 @@ function FaceIdIcon() {
 export function LoginPage() {
   const navigate = useNavigate();
   const showToast = useToast();
-  const { session, initializing, signIn, signUp } = useAuth();
+  const { session, initializing, signIn, signUp, continueAsGuest } = useAuth();
 
-  // Form mode
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  // Whether this user has logged in before (set on every successful login).
+  // Used to distinguish "new user coming from onboarding" vs "returning user".
+  const isReturningUser =
+    typeof window !== "undefined" &&
+    !!window.localStorage.getItem(LAST_EMAIL_KEY);
+
+  // Form mode — new users land on signup, returning users land on login
+  const [mode, setMode] = useState<"login" | "signup">(
+    isReturningUser ? "login" : "signup"
+  );
 
   // Fields
   const [email, setEmail] = useState("");
@@ -125,7 +135,7 @@ export function LoginPage() {
   const passwordRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
 
-  // ── Redirect if already authed ──────────────────────────────────────────────
+  // ── Redirect if already signed in (guests may open /login to create an account) ──
   useEffect(() => {
     if (initializing) return;
     if (session) navigate("/", { replace: true });
@@ -186,13 +196,37 @@ export function LoginPage() {
     provider === "apple" ? setAppleLoading(true) : setGoogleLoading(true);
     setFormError(null);
     try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: { redirectTo: `${getRedirectBase()}/#/login` },
-      });
-      if (error) { setFormError(error.message); return; }
-      if (data?.url) window.location.assign(data.url);
-      else setFormError(`Could not start ${provider === "apple" ? "Apple" : "Google"} sign-in.`);
+      if (isNative) {
+        // Native iOS: get the OAuth URL without triggering a browser redirect.
+        // We open it ourselves using @capacitor/browser (SFSafariViewController),
+        // which keeps the user inside the app. iOS intercepts the
+        // com.chefcoach.app://auth/callback redirect automatically — the
+        // in-app browser dismisses and AuthContext.appUrlOpen completes the session.
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider,
+          options: {
+            redirectTo: "com.chefcoach.app://auth/callback",
+            skipBrowserRedirect: true,   // ← do not open anything yet
+          },
+        });
+        if (error) { setFormError(error.message); return; }
+        if (!data?.url) {
+          setFormError(`Could not start ${provider === "apple" ? "Apple" : "Google"} sign-in.`);
+          return;
+        }
+        // Open inside the app using SFSafariViewController — never opens external Safari
+        const { Browser } = await import("@capacitor/browser");
+        await Browser.open({ url: data.url });
+      } else {
+        // Web: standard redirect to the OAuth provider, return to our origin
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider,
+          options: { redirectTo: `${getRedirectBase()}/#/login` },
+        });
+        if (error) { setFormError(error.message); return; }
+        if (data?.url) window.location.assign(data.url);
+        else setFormError(`Could not start ${provider === "apple" ? "Apple" : "Google"} sign-in.`);
+      }
     } finally {
       provider === "apple" ? setAppleLoading(false) : setGoogleLoading(false);
     }
@@ -253,7 +287,9 @@ export function LoginPage() {
           if (next >= MAX_ATTEMPTS) startLockout();
           return;
         }
-        // Success
+        // Success — clear guest flag; onboarding answers stay in localStorage and sync to account
+        window.localStorage.removeItem("chefcoach_guest");
+        markOnboardingCompleteOnDevice();
         window.localStorage.setItem(LAST_EMAIL_KEY, email.trim().toLowerCase());
         window.localStorage.setItem(BIOMETRIC_KEY, "true");
         navigate("/", { replace: true });
@@ -295,12 +331,10 @@ export function LoginPage() {
       setSubmitting(false);
     }
   };
-
-  // ── Loading gate ─────────────────────────────────────────────────────────────
   if (initializing) {
     return (
       <div
-        className="flex min-h-screen flex-col items-center justify-center bg-[var(--cream)] text-sm text-[var(--gray)]"
+        className="page-safe flex min-h-screen flex-col items-center justify-center bg-[var(--cream)] text-sm text-[var(--gray)]"
         aria-busy
         aria-label="Loading"
       >
@@ -316,7 +350,7 @@ export function LoginPage() {
   // ── Biometric screen ─────────────────────────────────────────────────────────
   if (showBiometric) {
     return (
-      <main className="min-h-screen bg-[var(--cream)] flex items-center justify-center px-6 py-8">
+      <main className="page-safe min-h-screen bg-[var(--cream)] flex items-center justify-center">
         <section className="w-full max-w-[430px] rounded-3xl border border-[var(--border)] bg-[var(--white)] p-8 shadow-sm text-center">
           <div className="flex justify-center text-[var(--green)]">
             <FaceIdIcon />
@@ -354,16 +388,23 @@ export function LoginPage() {
 
   // ── Main login/signup form ───────────────────────────────────────────────────
   return (
-    <main className="min-h-screen bg-[var(--cream)] px-6 py-8">
+    <main className="page-safe min-h-screen bg-[var(--cream)]">
       <section className="mx-auto mt-10 w-full max-w-[430px] rounded-3xl border border-[var(--border)] bg-[var(--white)] p-6 shadow-sm">
         <h1 className="font-playfair text-3xl text-[var(--green)]">
-          {mode === "login" ? "Welcome back" : "Create your account"}
+          {isReturningUser
+            ? "Welcome back"
+            : mode === "signup"
+              ? "Sign up"
+              : "Log in"}
         </h1>
         <p className="mt-1 text-sm text-[var(--gray)]">
-          {mode === "login"
-            ? "Log in to access your personalized dashboard."
-            : "Sign up to save your profile and progress."
-          }
+          {isReturningUser
+            ? mode === "login"
+              ? "Log in to access your personalized dashboard."
+              : "Sign up to save your profile and progress."
+            : mode === "signup"
+              ? "Create your free account to save your recipes and meal plan."
+              : "Already have an account? Log in below."}
         </p>
 
         {/* Mode toggle */}
@@ -433,6 +474,21 @@ export function LoginPage() {
             {googleLoading ? "Signing in…" : "Continue with Google"}
           </button>
         </div>
+
+        {/* Guest access — no account needed */}
+        <button
+          type="button"
+          onClick={() => {
+            continueAsGuest();
+            navigate("/", { replace: true });
+          }}
+          className="mt-3 w-full rounded-2xl border border-[var(--border)] bg-[var(--cream)] py-3 text-sm font-medium text-[var(--gray)] transition hover:border-[var(--green)]/30 hover:text-[var(--green)]"
+        >
+          Continue as Guest
+        </button>
+        <p className="mt-2 text-center text-[11px] text-[var(--gray)]">
+          3 free scans · no account required
+        </p>
 
         <div className="relative my-5 flex items-center gap-3">
           <div className="h-px flex-1 bg-[var(--border)]" aria-hidden />

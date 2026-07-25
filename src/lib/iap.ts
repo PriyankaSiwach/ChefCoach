@@ -2,7 +2,6 @@
  * In-App Purchase — ChefCoach Pro subscriptions.
  *
  * RevenueCat is configured lazily (paywall / Subscribe / Restore only).
- * Never initialized on app launch or unrelated flows (e.g. photo picker).
  *
  * Product IDs (App Store Connect + RevenueCat dashboard):
  *   com.chefcoach.pro.monthly  — $7.99 / month
@@ -10,6 +9,7 @@
  */
 
 import { Capacitor } from "@capacitor/core";
+import type { PurchasesPackage } from "@revenuecat/purchases-capacitor";
 import type { UserProfile } from "@/types";
 import {
   patchLocalProfileSubscription,
@@ -19,6 +19,7 @@ import { isProBypassEmail, resolveAuthEmail } from "@/lib/trial";
 import {
   ensurePurchasesReady,
   fetchOfferingsSafe,
+  parsePurchaseError,
   PRODUCT_MONTHLY,
   PRODUCT_YEARLY,
 } from "@/lib/revenueCat";
@@ -60,7 +61,58 @@ export type IAPResult =
   | { ok: false; error: string; userCancelled?: boolean };
 
 /**
- * Purchase a subscription — only called from paywall Subscribe button.
+ * Purchase a RevenueCat package — preferred path when offerings are already loaded.
+ */
+export async function purchasePackage(
+  pkg: PurchasesPackage,
+  appUserId: string | null,
+  currentProfile: UserProfile | null = null,
+  setProfile: ((p: UserProfile) => void) | null = null
+): Promise<IAPResult> {
+  if (!isNativePlatform()) {
+    return {
+      ok: false,
+      error: "Subscribe in the ChefCoach iOS app with your Apple ID to unlock Pro.",
+    };
+  }
+
+  try {
+    const ready = await ensurePurchasesReady(appUserId);
+    if (!ready) {
+      return { ok: false, error: "Subscription service is not available on this device." };
+    }
+
+    const mod = await import("@revenuecat/purchases-capacitor");
+    const { Purchases } = mod;
+    const { customerInfo } = await Purchases.purchasePackage({ aPackage: pkg });
+    const entitlement = customerInfo.entitlements?.active?.[ENTITLEMENT_ID];
+
+    if (!entitlement?.isActive) {
+      return {
+        ok: false,
+        error: `Purchase completed but Pro access is not active yet. Try Restore Purchases or contact support.`,
+      };
+    }
+
+    const productId = pkg.product.identifier;
+    const expiresAt = entitlement.expirationDate
+      ? new Date(entitlement.expirationDate)
+      : expiryForPlan(productId);
+
+    if (appUserId) {
+      await setProStatus(appUserId, true, expiresAt);
+    }
+    applyProToLocalProfile(true, expiresAt, setProfile, currentProfile);
+
+    return { ok: true, productId };
+  } catch (e: unknown) {
+    const parsed = parsePurchaseError(e);
+    return { ok: false, error: parsed.message, userCancelled: parsed.userCancelled };
+  }
+}
+
+/**
+ * Purchase by product ID — fetches offerings then purchases the matching package.
  */
 export async function purchaseProduct(
   productId: typeof PRODUCT_MONTHLY | typeof PRODUCT_YEARLY,
@@ -87,48 +139,19 @@ export async function purchaseProduct(
     }
 
     const pkg =
-      productId === PRODUCT_YEARLY
-        ? offerings.yearlyPackage
-        : offerings.monthlyPackage;
+      productId === PRODUCT_YEARLY ? offerings.yearlyPackage : offerings.monthlyPackage;
 
     if (!pkg) {
       return {
         ok: false,
-        error: `Product "${productId}" not found. Verify App Store Connect + RevenueCat setup.`,
+        error: `The ${productId === PRODUCT_YEARLY ? "yearly" : "monthly"} plan is unavailable right now.`,
       };
     }
 
-    const ready = await ensurePurchasesReady(appUserId);
-    if (!ready) {
-      return { ok: false, error: "Subscription SDK not available on this device." };
-    }
-
-    const mod = await import("@revenuecat/purchases-capacitor");
-    const { Purchases } = mod;
-    const { customerInfo } = await Purchases.purchasePackage({ aPackage: pkg });
-    const entitlement = customerInfo.entitlements?.active?.[ENTITLEMENT_ID];
-
-    if (!entitlement?.isActive) {
-      return {
-        ok: false,
-        error: `Purchase recorded but entitlement "${ENTITLEMENT_ID}" is not yet active. Contact support if this persists.`,
-      };
-    }
-
-    const expiresAt = entitlement.expirationDate
-      ? new Date(entitlement.expirationDate)
-      : expiryForPlan(productId);
-
-    if (appUserId) {
-      await setProStatus(appUserId, true, expiresAt);
-    }
-    applyProToLocalProfile(true, expiresAt, setProfile, currentProfile);
-
-    return { ok: true, productId };
+    return purchasePackage(pkg, appUserId, currentProfile, setProfile);
   } catch (e: unknown) {
-    const err = e as { message?: string; userCancelled?: boolean };
-    if (err.userCancelled) return { ok: false, error: "Purchase cancelled.", userCancelled: true };
-    return { ok: false, error: err.message || "Purchase failed. Please try again." };
+    const parsed = parsePurchaseError(e);
+    return { ok: false, error: parsed.message, userCancelled: parsed.userCancelled };
   }
 }
 
@@ -143,7 +166,7 @@ export async function restoreIAPPurchases(
 
   try {
     const ready = await ensurePurchasesReady(appUserId);
-    if (!ready) return { ok: false, error: "Purchase SDK unavailable." };
+    if (!ready) return { ok: false, error: "Subscription service unavailable." };
 
     const mod = await import("@revenuecat/purchases-capacitor");
     const { Purchases } = mod;
@@ -169,15 +192,11 @@ export async function restoreIAPPurchases(
 
     return { ok: true, productId: entitlement.productIdentifier };
   } catch (e: unknown) {
-    const err = e as { message?: string };
-    return { ok: false, error: err.message || "Restore failed. Please try again." };
+    const parsed = parsePurchaseError(e);
+    return { ok: false, error: parsed.message, userCancelled: parsed.userCancelled };
   }
 }
 
-/**
- * Local profile expiry check on login — does NOT call RevenueCat (no offerings fetch).
- * Pro status is refreshed when user purchases or restores via the paywall.
- */
 export async function verifySubscriptionOnLaunch(
   appUserId: string | null,
   currentProfile: UserProfile | null,
@@ -203,5 +222,4 @@ export async function verifySubscriptionOnLaunch(
   }
 }
 
-/** Re-export for PaywallScreen to prefetch offerings when opened. */
-export { fetchOfferingsSafe, type OfferingsState } from "@/lib/revenueCat";
+export { fetchOfferingsSafe, EMPTY_OFFERINGS, type OfferingsState } from "@/lib/revenueCat";

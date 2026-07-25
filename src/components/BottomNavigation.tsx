@@ -5,9 +5,10 @@ import {
   PlanTabIcon,
   ProfileTabIcon,
   SavedTabIcon,
+  TrackerTabIcon,
 } from "@/components/icons/TabIcons";
 
-type Tab = "cook" | "saved" | "plan" | "profile";
+type Tab = "cook" | "tracker" | "saved" | "plan" | "profile";
 
 type Props = {
   activeTab: Tab;
@@ -22,7 +23,7 @@ const tapClass =
 
 function NavIcon({ children }: { children: ReactNode }) {
   return (
-    <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center">
+    <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-visible">
       {children}
     </span>
   );
@@ -34,7 +35,7 @@ export function BottomNavigation({
   showProfileMealNudge = false,
   profileAvatarDataUri,
 }: Props) {
-  const tabs: Tab[] = ["cook", "saved", "plan", "profile"];
+  const tabs: Tab[] = ["cook", "tracker", "saved", "plan", "profile"];
   const activeIndex = Math.max(0, tabs.indexOf(activeTab));
   const indicatorWidth = 100 / tabs.length;
 
@@ -57,7 +58,7 @@ export function BottomNavigation({
         style={{ transition: "color 0.2s ease, transform 0.2s ease" }}
         onClick={() => onTabChange(tab)}
       >
-        <span className="relative" style={{ transform: `scale(${active ? 1.1 : 1})`, transition: "transform 0.2s ease" }}>
+        <span className="relative inline-flex overflow-visible" style={{ transform: `scale(${active ? 1.05 : 1})`, transition: "transform 0.2s ease" }}>
           <NavIcon>{icon}</NavIcon>
           {nudge ? (
             <span
@@ -93,8 +94,17 @@ export function BottomNavigation({
           label="Cook"
         />
         <Item
+          tab="tracker"
+          icon={<TrackerTabIcon active={activeTab === "tracker"} />}
+          label="Track"
+        />
+        <Item
           tab="saved"
-          icon={<SavedTabIcon active={activeTab === "saved"} />}
+          icon={
+            <span className="inline-flex translate-y-[-1px]">
+              <SavedTabIcon active={activeTab === "saved"} />
+            </span>
+          }
           label="Saved"
         />
         <Item
@@ -109,7 +119,7 @@ export function BottomNavigation({
               <img
                 src={profileAvatarDataUri}
                 alt=""
-                className="h-[22px] w-[22px] rounded-full border border-[var(--border)] object-cover"
+                className="h-5 w-5 rounded-full border border-[var(--border)] object-cover"
               />
             ) : (
               <ProfileTabIcon />

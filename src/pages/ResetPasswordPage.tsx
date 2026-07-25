@@ -57,7 +57,7 @@ export function ResetPasswordPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[var(--cream)] px-6 py-8">
+    <main className="page-safe min-h-screen bg-[var(--cream)]">
       <section className="mx-auto mt-10 w-full max-w-[430px] rounded-3xl border border-[var(--border)] bg-[var(--white)] p-6 shadow-sm">
         <h1 className="font-playfair text-2xl text-[var(--green)]">Set a new password</h1>
         <p className="mt-2 text-sm text-[var(--gray)]">

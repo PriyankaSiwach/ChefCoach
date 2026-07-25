@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import path from "path";
 import { runCookRecipes } from "./cook-recipes-logic.mjs";
 import { checkEmailExistsInSupabase } from "./auth-email-exists.mjs";
+import { deleteAccountForToken } from "./delete-account.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, "..", ".env.local") });
@@ -27,6 +28,24 @@ app.post("/api/auth/email-exists", async (req, res) => {
     return;
   }
   res.json({ exists: Boolean(result.exists) });
+});
+
+app.post("/api/auth/delete-account", async (req, res) => {
+  const authHeader = req.headers.authorization ?? "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+  const result = await deleteAccountForToken(token);
+  if (!result.configured) {
+    res.status(503).json({ ok: false, error: "not_configured" });
+    return;
+  }
+  if (!result.ok) {
+    res.status(result.error?.includes("Invalid") ? 401 : 502).json({
+      ok: false,
+      error: result.error || "Account deletion failed.",
+    });
+    return;
+  }
+  res.json({ ok: true });
 });
 
 app.post("/api/cook-recipes", async (req, res) => {

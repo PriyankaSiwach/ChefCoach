@@ -1,6 +1,6 @@
 type IconProps = { className?: string; active?: boolean };
 
-const base = "h-[22px] w-[22px] shrink-0";
+const base = "h-5 w-5 shrink-0";
 
 export function CookTabIcon({ className = "", active }: IconProps) {
   return (
@@ -32,19 +32,38 @@ export function CookTabIcon({ className = "", active }: IconProps) {
 export function SavedTabIcon({ className = "", active }: IconProps) {
   return (
     <svg
-      className={`${base} ${className}`}
+      className={`${base} block ${className}`}
       viewBox="0 0 24 24"
       fill="none"
       aria-hidden
     >
       <path
-        d="M12 20.5s-6.5-4.2-6.5-9.1c0-2.9 2.3-5.2 5.2-5.2 1.6 0 3.1.8 4.3 2.1 1.2-1.3 2.7-2.1 4.3-2.1 2.9 0 5.2 2.3 5.2 5.2 0 4.9-6.5 9.1-6.5 9.1z"
+        d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"
         stroke="currentColor"
         strokeWidth="1.75"
+        strokeLinecap="round"
         strokeLinejoin="round"
         fill={active ? "currentColor" : "none"}
         fillOpacity={active ? 0.2 : 0}
       />
+    </svg>
+  );
+}
+
+export function TrackerTabIcon({ className = "", active }: IconProps) {
+  return (
+    <svg
+      className={`${base} block ${className}`}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden
+    >
+      <path d="M4 9V7a3 3 0 0 1 3-3h2" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M15 4h2a3 3 0 0 1 3 3v2" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M20 15v2a3 3 0 0 1-3 3h-2" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9 20H7a3 3 0 0 1-3-3v-2" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+      <line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+      <circle cx="12" cy="12" r="1.3" fill={active ? "currentColor" : "none"} stroke={active ? "none" : "currentColor"} strokeWidth="1.25" />
     </svg>
   );
 }

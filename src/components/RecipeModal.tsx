@@ -21,6 +21,7 @@ import {
   MacroProteinIcon,
   TimerIcon,
 } from "@/components/icons/AppIcons";
+import { NutritionDisclaimer } from "@/components/NutritionDisclaimer";
 
 export type RecipeModalRecipe = Recipe | RecipeResultItem;
 
@@ -502,6 +503,8 @@ export function RecipeModal({
               {full.fat_g}g fat
             </span>
           </div>
+
+          <NutritionDisclaimer inline className="mt-3" />
 
           <section className="mt-8">
             <h3 className="font-playfair text-xl text-[var(--green)]">Ingredients</h3>

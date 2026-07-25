@@ -27,20 +27,65 @@ const PRO_BYPASS_EMAILS = [
 type EmailCarrier = {
   email?: string | null;
   user_metadata?: Record<string, unknown> | null;
+  identities?: Array<{
+    provider?: string;
+    identity_data?: Record<string, unknown>;
+  }> | null;
 };
 
-/** Best-effort login email from Supabase user + localStorage fallback. */
+function emailFromUnknown(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.includes("@") ? trimmed : null;
+}
+
+function emailFromIdentityData(data: Record<string, unknown> | undefined): string | null {
+  if (!data) return null;
+  return (
+    emailFromUnknown(data.email) ??
+    emailFromUnknown(data.email_address) ??
+    emailFromUnknown(data.preferred_email)
+  );
+}
+
+/** Best-effort login email from Supabase user + OAuth identities + localStorage fallback. */
 export function resolveAuthEmail(user?: EmailCarrier | null): string | null {
-  const fromUser = user?.email?.trim();
+  const fromUser = emailFromUnknown(user?.email);
   if (fromUser) return fromUser;
 
   const meta = user?.user_metadata ?? {};
   for (const key of ["email", "preferred_email", "user_email"] as const) {
-    const v = meta[key];
-    if (typeof v === "string" && v.includes("@")) return v.trim();
+    const v = emailFromUnknown(meta[key]);
+    if (v) return v;
+  }
+
+  // Apple/Google OAuth often store the sign-in email on the linked identity
+  // even when user.email is empty or stale on the session object.
+  const identities = user?.identities;
+  if (Array.isArray(identities)) {
+    const apple = identities.find((i) => i.provider === "apple");
+    const appleEmail = emailFromIdentityData(apple?.identity_data);
+    if (appleEmail) return appleEmail;
+
+    for (const identity of identities) {
+      const identityEmail = emailFromIdentityData(identity.identity_data);
+      if (identityEmail) return identityEmail;
+    }
   }
 
   return getStoredEmail()?.trim() ?? null;
+}
+
+/** Persist resolved login email for profile display and legacy helpers. */
+export function storeAuthEmail(email: string | null | undefined): void {
+  if (typeof window === "undefined") return;
+  const trimmed = email?.trim();
+  try {
+    if (trimmed) window.localStorage.setItem(KEY_EMAIL, trimmed);
+    else window.localStorage.removeItem(KEY_EMAIL);
+  } catch {
+    /* ignore */
+  }
 }
 
 export function isProBypassEmail(email?: string | null): boolean {

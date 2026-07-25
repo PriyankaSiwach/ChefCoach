@@ -5,6 +5,7 @@ import { readProfileFromStorage } from "@/lib/profileStorage";
 import { getRecipeRating } from "@/lib/recipe-ratings";
 import { useCountUp } from "@/hooks/useCountUp";
 import { MacroPills } from "./MacroPills";
+import { NutritionDisclaimer } from "./NutritionDisclaimer";
 import { RecipeModal } from "./RecipeModal";
 import { ChartIcon, ClockIcon, IconLabel, LockIcon, TrophyIcon } from "@/components/icons/AppIcons";
 import { AllergenBadge } from "./AllergenBadge";
@@ -182,15 +183,14 @@ export function RecipeResults({
             <div
               className={`${recipesLocked ? "pointer-events-none blur-[8px]" : ""}`}
             >
-            {isBest ? (
-              <span
-                className="absolute right-4 top-3 z-[5] rounded-full bg-[var(--green)] px-2.5 py-1 text-[10px] font-bold text-white shadow-md"
-                style={{ animation: "pulseBorder 2s ease-in-out infinite" }}
-              >
-                <IconLabel icon={<TrophyIcon className="h-3 w-3" />}>Best for your goal</IconLabel>
-              </span>
-            ) : null}
             <div className="px-5 pb-4 pt-5">
+              {isBest ? (
+                <span
+                  className="mb-2 inline-flex items-center gap-1 rounded-full bg-[var(--green)] px-2.5 py-0.5 text-[10px] font-bold text-white shadow-sm"
+                >
+                  <IconLabel icon={<TrophyIcon className="h-3 w-3" />}>Best for your goal</IconLabel>
+                </span>
+              ) : null}
               <h3 className="font-playfair text-[22px] leading-tight text-[var(--text)]">
                 {item.name}
               </h3>
@@ -263,6 +263,8 @@ export function RecipeResults({
                 carbs={item.carbs_g}
                 fat={item.fat_g}
               />
+
+              <NutritionDisclaimer inline className="mt-1.5" />
 
               <AllergenBadge
                 allergens={inferredAllergens}

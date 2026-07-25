@@ -32,8 +32,8 @@ export function FavouritesPanel({ favourites, onToggleFavourite, profile = null,
     return (
       <div className="app-shell px-4 pb-4">
         <div className="text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--green-pale)]" style={{ animation: "float 3s ease-in-out infinite" }}>
-            <SavedTabIcon className="h-7 w-7 text-[var(--green)]" active />
+          <div className="mx-auto flex h-16 w-16 items-center justify-center overflow-visible rounded-2xl bg-[var(--green-pale)]" style={{ animation: "float 3s ease-in-out infinite" }}>
+            <SavedTabIcon className="mb-px h-6 w-6 text-[var(--green)]" active />
           </div>
           <h2 className="mt-3 font-playfair text-xl text-[var(--green)]">Your recipe collection is empty</h2>
           <p className="mt-2 text-sm text-[var(--gray)]">

@@ -32,6 +32,7 @@ import {
   getHeroIngredient,
 } from "@/lib/mealFilter";
 import type { Meal, MealType } from "@/lib/mealLibrary";
+import { NutritionDisclaimer } from "@/components/NutritionDisclaimer";
 
 type Props = {
   profile: UserProfile;
@@ -133,8 +134,10 @@ function MealDetailSheet({
           protein={meal.protein_g}
           carbs={meal.carbs_g}
           fat={meal.fat_g}
-          className="mx-5 mb-3"
+          className="mx-5 mb-1"
         />
+
+        <NutritionDisclaimer inline className="mx-5 mb-3" />
 
         {/* Allergen warning */}
         {meal.allergens.length > 0 ? (
@@ -183,6 +186,7 @@ function MealDetailSheet({
             </button>
           ) : null}
         </div>
+
       </div>
     </div>
   );
