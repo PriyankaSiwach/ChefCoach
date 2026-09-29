@@ -58,6 +58,15 @@ describe("trial local quota", () => {
     expect(isTrackerTrialExhausted()).toBe(true);
   });
 
+  it("a former bypass email no longer gives unlimited scans", () => {
+    window.localStorage.setItem("recipify_email", "priyankasiwach214@gmail.com");
+    recordScanUsed();
+    recordScanUsed();
+    recordScanUsed();
+    expect(getScansUsed()).toBe(3);
+    expect(isTrialExhausted()).toBe(true);
+  });
+
   it("migrates legacy remaining-count key to used-count", () => {
     window.localStorage.setItem("recipify_trial_scans", "1");
     expect(getScansUsed()).toBe(2);

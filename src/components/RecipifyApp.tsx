@@ -31,22 +31,12 @@ import type { RecipeResultItem } from "@/types";
 import { useToast } from "./Toast";
 import { ScanCounter } from "./ScanCounter";
 import { useAuth } from "@/contexts/AuthContext";
-import {
-  ensureProBypassForUser,
-  isProSubscriptionActive,
-  pullProfileFromSupabase,
-  upsertProfileToSupabase,
-} from "@/lib/profileSupabase";
-import { verifySubscriptionOnLaunch } from "@/lib/iap";
+import { pullProfileFromSupabase, upsertProfileToSupabase } from "@/lib/profileSupabase";
+import { syncProOnLaunch } from "@/lib/iap";
+import { useIsPro } from "@/hooks/useIsPro";
 import { redirectToLoginAfterAccountReset } from "@/lib/session";
 import { PaywallScreen } from "./PaywallScreen";
-import {
-  isTrialExhausted,
-  migrateTrialState,
-  recordScanUsed,
-  resolveAuthEmail,
-  isProBypassEmail,
-} from "@/lib/trial";
+import { isTrialExhausted, migrateTrialState, recordScanUsed, resolveAuthEmail } from "@/lib/trial";
 import {
   defaultUserProfile,
   readProfileFromStorage,
@@ -100,11 +90,8 @@ export function RecipifyApp() {
   const [gateChecked, setGateChecked] = useState(false);
   const { user, signOut, deleteAccount, isGuest, guestId, ensureGuestSession } = useAuth();
 
-  // Pro status is derived from the profile object (profile_data JSON in Supabase).
-  // `isProSubscriptionActive` checks isPro flag AND subscription_expires_at.
-  const authEmail = resolveAuthEmail(user);
-  const trialBypass = isProBypassEmail(authEmail);
-  const effectivePro = isProSubscriptionActive(profile) || trialBypass;
+  // Pro comes only from the server's answer or the RevenueCat SDK (see proStatus.ts).
+  const effectivePro = useIsPro(user?.id ?? guestId ?? null);
 
   /** Drives re-render of ScanCounter after each scan. */
   const [scanCountTick, setScanCountTick] = useState(0);
@@ -246,7 +233,7 @@ export function RecipifyApp() {
     }
 
     setProfileSyncAttempted(false);
-    void pullProfileFromSupabase(user.id, resolveAuthEmail(user)).finally(() => {
+    void pullProfileFromSupabase(user.id).finally(() => {
       setProfileSyncAttempted(true);
     });
   }, [profileReady, profile, isGuest, user, setProfile]);
@@ -257,22 +244,11 @@ export function RecipifyApp() {
     return initReminderSync();
   }, []);
 
-  // On login: verify subscription is still active against RevenueCat / local expiry
+  // On launch / sign-in: ask the server (and, if needed, the RevenueCat SDK) for Pro.
   useEffect(() => {
-    if (!user?.id || !profileReady) return;
-    void verifySubscriptionOnLaunch(user.id, profile, setProfile, authEmail);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, profileReady, authEmail]);
-
-  // Lifetime Pro for support / owner accounts — apply immediately in UI + Supabase
-  useEffect(() => {
-    if (!user?.id || !profileReady || !trialBypass) return;
-    void ensureProBypassForUser(user.id, authEmail);
-    setProfile((prev) => {
-      if (!prev || prev.isPro) return prev;
-      return { ...prev, isPro: true, subscriptionExpiresAt: null };
-    });
-  }, [user?.id, profileReady, trialBypass, authEmail, setProfile]);
+    if (!user?.id) return;
+    void syncProOnLaunch(user.id);
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user?.id || !profileReady || profile === null) return;
@@ -294,19 +270,6 @@ export function RecipifyApp() {
       setSearchParams(next, { replace: true });
     }
   }, [gateChecked, searchParams, setSearchParams, showToast]);
-
-  // When subscription changes from another tab/context, resync local profile.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const onSub = () => {
-      try {
-        const raw = window.localStorage.getItem(RECIPIFY_PROFILE_STORAGE_KEY);
-        if (raw) setProfile(JSON.parse(raw) as typeof profile);
-      } catch { /* ignore */ }
-    };
-    window.addEventListener("recipify-subscription-changed", onSub);
-    return () => window.removeEventListener("recipify-subscription-changed", onSub);
-  }, [setProfile]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -737,8 +700,6 @@ export function RecipifyApp() {
         onClose={() => setPaywallOpen(false)}
         onPurchaseSuccess={() => setPaywallOpen(false)}
         appUserId={user?.id ?? guestId ?? null}
-        currentProfile={profile}
-        setProfile={setProfile}
         isGuest={isGuest}
       />
       {showEditProfile && profile ? (

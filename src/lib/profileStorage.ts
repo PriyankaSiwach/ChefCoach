@@ -272,10 +272,3 @@ export function normalizeUserProfile(raw: unknown): UserProfile | null {
           : undefined,
   };
 }
-
-/** Return true if the profile's subscriptionExpiresAt is in the future (or null = forever). */
-export function isProSubscriptionActive(profile: { isPro?: boolean; subscriptionExpiresAt?: string | null } | null | undefined): boolean {
-  if (!profile?.isPro) return false;
-  if (!profile.subscriptionExpiresAt) return true; // no expiry = lifetime
-  return new Date(profile.subscriptionExpiresAt) > new Date();
-}

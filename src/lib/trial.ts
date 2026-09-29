@@ -6,7 +6,7 @@
  *   - Track (food):  3 lifetime scans (`chefcoach_tracker_scans_used`)
  *   Total: 6 free AI scans.
  *
- * Pro / bypass emails: unlimited for both.
+ * Pro: unlimited for both — callers check Pro (proStatus.ts) before these gates.
  */
 
 import { supabase } from "@/lib/supabaseClient";
@@ -25,12 +25,6 @@ const KEY_TRACKER_SCANS_USED = "chefcoach_tracker_scans_used";
 const KEY_SCANS_LEGACY = "recipify_trial_scans"; // old remaining-based key
 const KEY_ENDED_LEGACY = "recipify_trial_ended";
 const KEY_EMAIL = "recipify_email";
-
-/** Lifetime Pro — no paywall, no scan limit (synced to Supabase profile_data). */
-const PRO_BYPASS_EMAILS = [
-  "support@pstechnologiesinc.com",
-  "priyankasiwach214@gmail.com",
-] as const;
 
 type EmailCarrier = {
   email?: string | null;
@@ -96,31 +90,9 @@ export function storeAuthEmail(email: string | null | undefined): void {
   }
 }
 
-export function isProBypassEmail(email?: string | null): boolean {
-  const candidates = new Set<string>();
-  const resolved = resolveAuthEmail(
-    email ? ({ email } satisfies EmailCarrier) : null
-  );
-  if (resolved) candidates.add(resolved.toLowerCase());
-  if (email?.trim()) candidates.add(email.trim().toLowerCase());
-  const stored = getStoredEmail()?.trim().toLowerCase();
-  if (stored) candidates.add(stored);
-
-  if (candidates.size === 0) return false;
-  return PRO_BYPASS_EMAILS.some((allowed) => candidates.has(allowed.toLowerCase()));
-}
-
 export function getStoredEmail(): string | null {
   if (typeof window === "undefined") return null;
   try { return window.localStorage.getItem(KEY_EMAIL); } catch { return null; }
-}
-
-/**
- * When true: unlimited scans + full Pro UI (no paywall).
- * Matches {@link PRO_BYPASS_EMAILS} (session or stored login email).
- */
-export function isTrialScanBypassActive(sessionEmail?: string | null): boolean {
-  return isProBypassEmail(sessionEmail);
 }
 
 // ─── Local storage helpers ────────────────────────────────────────────────────
@@ -168,11 +140,7 @@ export function getTrialScansRemaining(): number {
 
 /** True when all free scans are used up. */
 export function isTrialExhausted(): boolean {
-  return isQuotaExhausted(
-    getScansUsed(),
-    FREE_SCAN_LIMIT,
-    isTrialScanBypassActive()
-  );
+  return isQuotaExhausted(getScansUsed(), FREE_SCAN_LIMIT);
 }
 
 /**
@@ -180,7 +148,6 @@ export function isTrialExhausted(): boolean {
  * Use {@link isTrialExhausted} instead.
  */
 export function getTrialEnded(): boolean {
-  if (isTrialScanBypassActive()) return false;
   return isTrialExhausted();
 }
 
@@ -190,9 +157,7 @@ export function getTrialEnded(): boolean {
  * Returns the new local scansUsed count.
  */
 export function recordScanUsed(userId?: string | null): number {
-  const bypass = isTrialScanBypassActive();
-  const next = incrementUsedCount(readLocalScansUsed(), bypass);
-  if (bypass) return next;
+  const next = incrementUsedCount(readLocalScansUsed());
   writeLocalScansUsed(next);
 
   // Patch the local profile JSON so RecipifyApp can derive isPro/scans from profile
@@ -286,18 +251,12 @@ export function getTrackerScansUsed(): number {
 
 /** True when all free Food Tracker scans are used up. */
 export function isTrackerTrialExhausted(): boolean {
-  return isQuotaExhausted(
-    getTrackerScansUsed(),
-    FREE_TRACKER_SCAN_LIMIT,
-    isTrialScanBypassActive()
-  );
+  return isQuotaExhausted(getTrackerScansUsed(), FREE_TRACKER_SCAN_LIMIT);
 }
 
 /** Record one Food Tracker scan. Returns the new used count. */
 export function recordTrackerScanUsed(): number {
-  const bypass = isTrialScanBypassActive();
-  const next = incrementUsedCount(readLocalTrackerScansUsed(), bypass);
-  if (bypass) return next;
+  const next = incrementUsedCount(readLocalTrackerScansUsed());
   writeLocalTrackerScansUsed(next);
   return next;
 }

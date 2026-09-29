@@ -7,8 +7,8 @@
  *
  * Purchase flow:
  *   1. User selects Monthly or Yearly
- *   2. Tap "Subscribe" → purchaseProduct() → native Apple IAP sheet
- *   3. On success: Supabase profile_data updated → onPurchaseSuccess() called
+ *   2. Tap "Subscribe" → purchasePackage() → native Apple IAP sheet
+ *   3. On success: Pro shows from the RevenueCat SDK, the server re-checks → onPurchaseSuccess()
  *
  * Restore flow:
  *   Tap "Restore Purchases" → restoreIAPPurchases() → checks entitlements
@@ -25,7 +25,6 @@ import {
 } from "@/lib/iap";
 import { useToast } from "@/components/Toast";
 import { APP_NAME } from "@/lib/brand";
-import type { UserProfile } from "@/types";
 import type { ComponentType } from "react";
 import {
   BotIcon,
@@ -48,9 +47,6 @@ type Props = {
   onClose: () => void;
   onPurchaseSuccess: () => void;
   appUserId: string | null;
-  /** Pass current profile so iap.ts can patch it in-place after purchase. */
-  currentProfile: UserProfile | null;
-  setProfile: (p: UserProfile) => void;
   /** True when the user is browsing as a guest (anonymous Supabase user, or local-only fallback). */
   isGuest?: boolean;
 };
@@ -70,8 +66,6 @@ export function PaywallScreen({
   onClose,
   onPurchaseSuccess,
   appUserId,
-  currentProfile,
-  setProfile,
   isGuest = false,
 }: Props) {
   const [selectedPlan, setSelectedPlan] = useState<Plan>("yearly");
@@ -130,12 +124,7 @@ export function PaywallScreen({
 
     setLoading(true);
     try {
-      const result = await purchasePackage(
-        selectedPackage,
-        appUserId,
-        currentProfile,
-        setProfile
-      );
+      const result = await purchasePackage(selectedPackage, appUserId);
       if (result.ok) {
         showToast(`🎉 Welcome to ${APP_NAME} Pro!`, "success");
         if (isGuest) {
@@ -158,7 +147,7 @@ export function PaywallScreen({
   const handleRestore = async () => {
     setRestoring(true);
     try {
-      const result = await restoreIAPPurchases(appUserId, currentProfile, setProfile);
+      const result = await restoreIAPPurchases(appUserId);
       if (result.ok) {
         showToast("✅ Purchases restored! You now have Pro access.", "success");
         onPurchaseSuccess();

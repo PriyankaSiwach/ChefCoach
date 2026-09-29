@@ -11,7 +11,8 @@ import type { Session, User } from "@supabase/supabase-js";
 import type { AuthError } from "@supabase/supabase-js";
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/lib/supabaseClient";
-import { pullProfileFromSupabase, ensureProBypassForUser } from "@/lib/profileSupabase";
+import { pullProfileFromSupabase } from "@/lib/profileSupabase";
+import { clearProStatus } from "@/lib/proStatus";
 import { resolveAuthEmail, storeAuthEmail } from "@/lib/trial";
 import { clearAccountOnDevice, clearRecipifyLocalSession } from "@/lib/session";
 import { deleteSupabaseAccount } from "@/lib/deleteAccount";
@@ -121,7 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const syncEmailForLegacyApis = useCallback((s: Session | null) => {
     if (typeof window === "undefined") return;
     // Anonymous users have no email; clearing the stored one stops them from
-    // inheriting a previous account's email (and its Pro exception).
+    // inheriting a previous account's email.
     const email = s?.user && !isAnonymousUser(s.user) ? resolveAuthEmail(s.user) : null;
     storeAuthEmail(email);
   }, []);
@@ -163,9 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         void (async () => {
           try {
             if (s?.user?.id) {
-              const email = isAnonymousUser(s.user) ? null : resolveAuthEmail(s.user);
-              await pullProfileFromSupabase(s.user.id, email);
-              await ensureProBypassForUser(s.user.id, email);
+              await pullProfileFromSupabase(s.user.id);
             }
           } catch (e) {
             console.warn("[Auth] Background sync failed:", e);
@@ -191,7 +190,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Guest received an anonymous session: stay a guest, keep the local flag,
         // and back the onboarding profile up to this user's row.
         const userId = nextSession.user.id;
-        void pullProfileFromSupabase(userId, null).catch((e) => {
+        void pullProfileFromSupabase(userId).catch((e) => {
           console.warn("[Auth] Anonymous profile sync failed:", e);
         });
       } else if (event === "SIGNED_IN" && nextSession?.user?.id) {
@@ -212,9 +211,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         void (async () => {
           try {
-            const email = resolvedEmail ?? resolveAuthEmail(nextSession.user);
-            await pullProfileFromSupabase(nextSession.user.id, email);
-            await ensureProBypassForUser(nextSession.user.id, email);
+            await pullProfileFromSupabase(nextSession.user.id);
           } catch (e) {
             console.warn("[Auth] Post sign-in sync failed:", e);
           }
@@ -232,6 +229,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       if (event === "SIGNED_OUT") {
         clearRecipifyLocalSession();
+        clearProStatus();
         void revenueCatLogOut().catch(() => {});
       }
       window.dispatchEvent(new CustomEvent("recipify-profile-sync"));
@@ -413,6 +411,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setGuestId(null);
 
     clearRecipifyLocalSession();
+    clearProStatus();
     syncEmailForLegacyApis(null);
     setSession(null);
     window.dispatchEvent(new CustomEvent("recipify-profile-sync"));
@@ -446,6 +445,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLocalGuest(false);
     setGuestId(null);
     clearAccountOnDevice();
+    clearProStatus();
     syncEmailForLegacyApis(null);
     setSession(null);
     window.dispatchEvent(new CustomEvent("recipify-profile-sync"));

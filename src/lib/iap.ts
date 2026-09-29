@@ -1,7 +1,11 @@
 /**
  * In-App Purchase — ChefCoach Pro subscriptions.
  *
- * RevenueCat is configured lazily (paywall / Subscribe / Restore only).
+ * RevenueCat is configured lazily (paywall / Subscribe / Restore, or on launch when
+ * the server can't confirm Pro).
+ *
+ * The phone never grants itself Pro. After a purchase or restore it records what the
+ * RevenueCat SDK reports (in memory) and asks the server to re-check; see proStatus.ts.
  *
  * Product IDs (App Store Connect + RevenueCat dashboard):
  *   com.chefcoach.pro.monthly  — $7.99 / month
@@ -10,50 +14,24 @@
 
 import { Capacitor } from "@capacitor/core";
 import type { PurchasesPackage } from "@revenuecat/purchases-capacitor";
-import type { UserProfile } from "@/types";
 import {
-  patchLocalProfileSubscription,
-  setProStatus,
-} from "@/lib/profileSupabase";
-import { isProBypassEmail, resolveAuthEmail } from "@/lib/trial";
-import {
+  applyProFromCustomerInfo,
+  checkRevenueCatEntitlement,
   ensurePurchasesReady,
   fetchOfferingsSafe,
+  getRevenueCatEntitlementId,
   parsePurchaseError,
   PRODUCT_MONTHLY,
   PRODUCT_YEARLY,
 } from "@/lib/revenueCat";
+import { refreshSubscriptionStatus } from "@/lib/subscription-api";
+import { isProActive } from "@/lib/proStatus";
 
 export { PRODUCT_MONTHLY, PRODUCT_YEARLY };
-
-const ENTITLEMENT_ID = "pro";
 
 function isNativePlatform(): boolean {
   const p = Capacitor.getPlatform();
   return p === "ios" || p === "android";
-}
-
-function expiryForPlan(productId: string): Date {
-  const d = new Date();
-  if (productId === PRODUCT_YEARLY) d.setFullYear(d.getFullYear() + 1);
-  else d.setMonth(d.getMonth() + 1);
-  return d;
-}
-
-function applyProToLocalProfile(
-  isPro: boolean,
-  expiresAt: Date | null,
-  setProfile: ((p: UserProfile) => void) | null,
-  currentProfile: UserProfile | null
-): void {
-  patchLocalProfileSubscription(isPro, expiresAt);
-  if (setProfile && currentProfile) {
-    setProfile({
-      ...currentProfile,
-      isPro,
-      subscriptionExpiresAt: expiresAt?.toISOString() ?? null,
-    });
-  }
 }
 
 export type IAPResult =
@@ -65,9 +43,7 @@ export type IAPResult =
  */
 export async function purchasePackage(
   pkg: PurchasesPackage,
-  appUserId: string | null,
-  currentProfile: UserProfile | null = null,
-  setProfile: ((p: UserProfile) => void) | null = null
+  appUserId: string | null
 ): Promise<IAPResult> {
   if (!isNativePlatform()) {
     return {
@@ -85,7 +61,8 @@ export async function purchasePackage(
     const mod = await import("@revenuecat/purchases-capacitor");
     const { Purchases } = mod;
     const { customerInfo } = await Purchases.purchasePackage({ aPackage: pkg });
-    const entitlement = customerInfo.entitlements?.active?.[ENTITLEMENT_ID];
+    applyProFromCustomerInfo(customerInfo);
+    const entitlement = customerInfo.entitlements?.active?.[getRevenueCatEntitlementId()];
 
     if (!entitlement?.isActive) {
       return {
@@ -94,17 +71,10 @@ export async function purchasePackage(
       };
     }
 
-    const productId = pkg.product.identifier;
-    const expiresAt = entitlement.expirationDate
-      ? new Date(entitlement.expirationDate)
-      : expiryForPlan(productId);
+    // Pro already shows from the SDK; the server check runs in the background.
+    void refreshSubscriptionStatus();
 
-    if (appUserId) {
-      await setProStatus(appUserId, true, expiresAt);
-    }
-    applyProToLocalProfile(true, expiresAt, setProfile, currentProfile);
-
-    return { ok: true, productId };
+    return { ok: true, productId: pkg.product.identifier };
   } catch (e: unknown) {
     const parsed = parsePurchaseError(e);
     return { ok: false, error: parsed.message, userCancelled: parsed.userCancelled };
@@ -116,9 +86,7 @@ export async function purchasePackage(
  */
 export async function purchaseProduct(
   productId: typeof PRODUCT_MONTHLY | typeof PRODUCT_YEARLY,
-  appUserId: string | null,
-  currentProfile: UserProfile | null = null,
-  setProfile: ((p: UserProfile) => void) | null = null
+  appUserId: string | null
 ): Promise<IAPResult> {
   if (!isNativePlatform()) {
     return {
@@ -148,18 +116,14 @@ export async function purchaseProduct(
       };
     }
 
-    return purchasePackage(pkg, appUserId, currentProfile, setProfile);
+    return purchasePackage(pkg, appUserId);
   } catch (e: unknown) {
     const parsed = parsePurchaseError(e);
     return { ok: false, error: parsed.message, userCancelled: parsed.userCancelled };
   }
 }
 
-export async function restoreIAPPurchases(
-  appUserId: string | null,
-  currentProfile: UserProfile | null = null,
-  setProfile: ((p: UserProfile) => void) | null = null
-): Promise<IAPResult> {
+export async function restoreIAPPurchases(appUserId: string | null): Promise<IAPResult> {
   if (!isNativePlatform()) {
     return { ok: false, error: "Restore is only available in the ChefCoach iOS app." };
   }
@@ -171,11 +135,15 @@ export async function restoreIAPPurchases(
     const mod = await import("@revenuecat/purchases-capacitor");
     const { Purchases } = mod;
     const { customerInfo } = await Purchases.restorePurchases();
-    const entitlement = customerInfo.entitlements?.active?.[ENTITLEMENT_ID];
+    applyProFromCustomerInfo(customerInfo);
+    const entitlement = customerInfo.entitlements?.active?.[getRevenueCatEntitlementId()];
 
     if (!entitlement?.isActive) {
-      if (appUserId) await setProStatus(appUserId, false, null);
-      applyProToLocalProfile(false, null, setProfile, currentProfile);
+      // The server may still know about Pro (comp account or legacy grant).
+      const server = await refreshSubscriptionStatus();
+      if (server.ok && isProActive(appUserId)) {
+        return { ok: true, productId: server.status.source };
+      }
       return {
         ok: false,
         error:
@@ -183,12 +151,7 @@ export async function restoreIAPPurchases(
       };
     }
 
-    const expiresAt = entitlement.expirationDate
-      ? new Date(entitlement.expirationDate)
-      : expiryForPlan(PRODUCT_MONTHLY);
-
-    if (appUserId) await setProStatus(appUserId, true, expiresAt);
-    applyProToLocalProfile(true, expiresAt, setProfile, currentProfile);
+    void refreshSubscriptionStatus();
 
     return { ok: true, productId: entitlement.productIdentifier };
   } catch (e: unknown) {
@@ -197,28 +160,15 @@ export async function restoreIAPPurchases(
   }
 }
 
-export async function verifySubscriptionOnLaunch(
-  appUserId: string | null,
-  currentProfile: UserProfile | null,
-  setProfile: (p: UserProfile) => void,
-  userEmail?: string | null
-): Promise<void> {
-  const authEmail = userEmail ?? resolveAuthEmail(null);
-  if (isProBypassEmail(authEmail)) {
-    if (appUserId) await setProStatus(appUserId, true, null);
-    if (currentProfile) applyProToLocalProfile(true, null, setProfile, currentProfile);
-    return;
-  }
-
-  if (!currentProfile?.isPro) return;
-
-  const localExpiry = currentProfile.subscriptionExpiresAt
-    ? new Date(currentProfile.subscriptionExpiresAt)
-    : null;
-
-  if (localExpiry && localExpiry <= new Date()) {
-    if (appUserId) await setProStatus(appUserId, false, null);
-    applyProToLocalProfile(false, null, setProfile, currentProfile);
+/**
+ * On launch: ask the server first. If it can't confirm Pro (not Pro, offline, or not
+ * configured), ask the RevenueCat SDK on native so a subscriber it knows about keeps Pro.
+ * Failures keep the last known server answer (until its expiry).
+ */
+export async function syncProOnLaunch(userId: string): Promise<void> {
+  await refreshSubscriptionStatus();
+  if (isNativePlatform() && !isProActive(userId)) {
+    await checkRevenueCatEntitlement(userId);
   }
 }
 

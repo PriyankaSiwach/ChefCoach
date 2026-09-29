@@ -1,9 +1,12 @@
 import { Capacitor } from "@capacitor/core";
 import type { CustomerInfo, PurchasesPackage } from "@revenuecat/purchases-capacitor";
 import { PACKAGE_TYPE, PURCHASES_ERROR_CODE } from "@revenuecat/purchases-capacitor";
+import { setRevenueCatEntitlement } from "@/lib/proStatus";
 
 // Public iOS API key — safe to embed in the client bundle (RevenueCat design).
 const RC_IOS_API_KEY = "appl_zWISHeIgOcePXOIWgZObpgvCzdY";
+// Entitlement *identifier* (lookup key) from the RevenueCat dashboard. The server's
+// REVENUECAT_ENTITLEMENT_ID must be the internal ID ("entl…") of this same entitlement.
 const ENTITLEMENT_ID = "pro";
 
 /** Must match App Store Connect + RevenueCat dashboard exactly. */
@@ -14,6 +17,8 @@ type PurchasesModule = typeof import("@revenuecat/purchases-capacitor");
 
 let purchasesMod: PurchasesModule | null = null;
 let configured = false;
+/** The appUserID RevenueCat is currently identified as (Supabase user ID or local guest ID). */
+let currentAppUserId: string | null = null;
 
 export type OfferingsState = {
   available: boolean;
@@ -87,18 +92,14 @@ export function entitlementActive(info: CustomerInfo): boolean {
   return Boolean(active[ENTITLEMENT_ID]?.isActive);
 }
 
+/** Record what the SDK reports, in memory only, for the user RevenueCat is identified as. */
 export function applyProFromCustomerInfo(customerInfo: CustomerInfo): void {
-  if (typeof window === "undefined") return;
-  try {
-    if (entitlementActive(customerInfo)) {
-      window.localStorage.setItem("recipify_is_pro", "true");
-    } else {
-      window.localStorage.removeItem("recipify_is_pro");
-    }
-    window.dispatchEvent(new CustomEvent("recipify-subscription-changed"));
-  } catch {
-    /* ignore */
-  }
+  const entitlement = customerInfo.entitlements?.active?.[ENTITLEMENT_ID];
+  setRevenueCatEntitlement({
+    userId: currentAppUserId,
+    active: Boolean(entitlement?.isActive),
+    expiresAt: entitlement?.expirationDate ?? null,
+  });
 }
 
 /** Resolve monthly/yearly packages from a RevenueCat offering. */
@@ -195,8 +196,10 @@ export async function ensurePurchasesReady(appUserId: string | null): Promise<bo
         appUserID: appUserId ?? undefined,
       });
       configured = true;
+      currentAppUserId = appUserId ?? null;
     } else if (appUserId) {
       const { customerInfo } = await Purchases.logIn({ appUserID: appUserId });
+      currentAppUserId = appUserId;
       applyProFromCustomerInfo(customerInfo);
     }
     return true;
@@ -304,16 +307,36 @@ export async function refreshProFromRevenueCat(_appUserId?: string | null): Prom
   }
 }
 
+/**
+ * Ask the SDK directly (native only). Used on launch when the server can't confirm Pro,
+ * so a subscriber RevenueCat knows about on this device still gets Pro.
+ */
+export async function checkRevenueCatEntitlement(appUserId: string | null): Promise<boolean> {
+  const ready = await ensurePurchasesReady(appUserId);
+  if (!ready) return false;
+  try {
+    const mod = await getPurchases();
+    if (!mod) return false;
+    const { customerInfo } = await mod.Purchases.getCustomerInfo();
+    applyProFromCustomerInfo(customerInfo);
+    return entitlementActive(customerInfo);
+  } catch (e) {
+    logRevenueCatWarning("getCustomerInfo failed (non-fatal)", e);
+    return false;
+  }
+}
+
 export async function revenueCatLogOut(): Promise<void> {
   if (!configured) return;
   try {
     const mod = await getPurchases();
     if (!mod) return;
-    const { customerInfo } = await mod.Purchases.logOut();
-    applyProFromCustomerInfo(customerInfo);
+    await mod.Purchases.logOut();
   } catch (e) {
     logRevenueCatWarning("logOut failed (non-fatal)", e);
   } finally {
     configured = false;
+    currentAppUserId = null;
+    setRevenueCatEntitlement(null);
   }
 }

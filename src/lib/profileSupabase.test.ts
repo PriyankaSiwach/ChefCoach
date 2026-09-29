@@ -57,7 +57,7 @@ describe("avatar stays on the device", () => {
     });
     upsert.mockResolvedValue({ error: null });
 
-    await syncProfileAfterAuth("user-1", null);
+    await syncProfileAfterAuth("user-1");
 
     const stored = JSON.parse(window.localStorage.getItem(RECIPIFY_PROFILE_STORAGE_KEY) ?? "{}");
     expect(stored.avatarDataUri).toBe(AVATAR);
@@ -72,9 +72,46 @@ describe("avatar stays on the device", () => {
     });
     upsert.mockResolvedValue({ error: null });
 
-    await syncProfileAfterAuth("user-1", null);
+    await syncProfileAfterAuth("user-1");
 
     const stored = JSON.parse(window.localStorage.getItem(RECIPIFY_PROFILE_STORAGE_KEY) ?? "{}");
     expect(stored.avatarDataUri ?? null).toBeNull();
+  });
+});
+
+describe("the phone can't give itself Pro through profile sync", () => {
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("a local isPro is not kept when merging with the cloud profile", async () => {
+    window.localStorage.setItem(
+      RECIPIFY_PROFILE_STORAGE_KEY,
+      JSON.stringify(profile({ isPro: true, subscriptionExpiresAt: "2099-01-01T00:00:00.000Z" }))
+    );
+    maybeSingle.mockResolvedValue({
+      data: { profile_data: profile({ isPro: false, subscriptionExpiresAt: null }) },
+      error: null,
+    });
+    upsert.mockResolvedValue({ error: null });
+
+    await syncProfileAfterAuth("user-1");
+
+    const stored = JSON.parse(window.localStorage.getItem(RECIPIFY_PROFILE_STORAGE_KEY) ?? "{}");
+    expect(stored.isPro).toBe(false);
+    expect(stored.subscriptionExpiresAt).toBeNull();
+  });
+
+  it("a bypass email no longer turns on Pro during sync", async () => {
+    window.localStorage.setItem("recipify_email", "support@pstechnologiesinc.com");
+    maybeSingle.mockResolvedValue({ data: { profile_data: profile() }, error: null });
+    upsert.mockResolvedValue({ error: null });
+
+    await syncProfileAfterAuth("user-1");
+
+    const stored = JSON.parse(window.localStorage.getItem(RECIPIFY_PROFILE_STORAGE_KEY) ?? "{}");
+    expect(stored.isPro ?? false).toBe(false);
+    const [row] = upsert.mock.calls[0] as [{ profile_data: Record<string, unknown> }];
+    expect(row.profile_data.isPro ?? false).toBe(false);
   });
 });

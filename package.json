@@ -13,7 +13,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit && npm run typecheck:server",
     "typecheck:server": "tsc --noEmit -p server/tsconfig.json && tsc --noEmit -p server/tsconfig.mjs.json",
-    "lint": "eslint src/lib/scanQuota.ts src/lib/trial.ts src/lib/cook-recipe-mapper.ts src/lib/mealFilter.ts src/lib/cook-recipes-api.ts src/lib/guestAuth.ts src/lib/deleteAccount.ts src/lib/apiBase.ts src/lib/vision-api.ts src/lib/*.test.ts src/test server/http-error.mjs server/cook-recipes-validate.mjs server/cook-recipes-logic.mjs server/lru-cache.mjs server/rate-limit.mjs server/require-auth.mjs server/cook-recipes-http.mjs server/daily-cap.mjs server/client-ip.mjs server/ai-guards.mjs server/vision-validate.mjs server/vision-logic.mjs server/vision-http.mjs server/revenuecat.mjs server/subscription-refresh.mjs server/app.mjs server/*.test.ts"
+    "lint": "eslint src/lib/scanQuota.ts src/lib/trial.ts src/lib/cook-recipe-mapper.ts src/lib/mealFilter.ts src/lib/cook-recipes-api.ts src/lib/guestAuth.ts src/lib/deleteAccount.ts src/lib/apiBase.ts src/lib/vision-api.ts src/lib/proStatus.ts src/lib/subscription-api.ts src/lib/iap.ts src/hooks/useIsPro.ts src/lib/*.test.ts src/test server/http-error.mjs server/cook-recipes-validate.mjs server/cook-recipes-logic.mjs server/lru-cache.mjs server/rate-limit.mjs server/require-auth.mjs server/cook-recipes-http.mjs server/daily-cap.mjs server/client-ip.mjs server/ai-guards.mjs server/vision-validate.mjs server/vision-logic.mjs server/vision-http.mjs server/revenuecat.mjs server/subscription-refresh.mjs server/app.mjs server/*.test.ts"
   },
   "dependencies": {
     "@capacitor/app": "^6.0.3",
