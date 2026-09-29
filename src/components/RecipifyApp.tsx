@@ -4,7 +4,7 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import type { DietFilter, Recipe, TimeFilter, UserProfile } from "@/types";
 import { useFavourites } from "@/hooks/useFavourites";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
-import { detectFridgeIngredients } from "@/lib/openai";
+import { scanFridgeIngredients } from "@/lib/vision-api";
 import { filterRecipeResults } from "@/lib/fridge-recipe-match";
 import { fetchCookRecipesFromApi } from "@/lib/cook-recipes-api";
 import { BottomNavigation } from "./BottomNavigation";
@@ -63,14 +63,6 @@ const COOK_MORE_RECIPE_COUNT = 2;
 const COOK_MAX_RECIPES = 6;
 
 export function RecipifyApp() {
-  const mockIngredients = [
-    "eggs",
-    "spinach",
-    "tomato",
-    "chicken breast",
-    "yogurt",
-    "rice",
-  ];
   const [currentImage, setCurrentImage] = useState<string | null>(null);
   const [selectedDiet, setSelectedDiet] = useState<DietFilter>("None");
   const [selectedTime, setSelectedTime] = useState<TimeFilter>("any");
@@ -106,7 +98,7 @@ export function RecipifyApp() {
   const [celebrationQueue, setCelebrationQueue] = useState<AchievementUnlock[]>([]);
 
   const [gateChecked, setGateChecked] = useState(false);
-  const { user, signOut, deleteAccount, isGuest, guestId } = useAuth();
+  const { user, signOut, deleteAccount, isGuest, guestId, ensureGuestSession } = useAuth();
 
   // Pro status is derived from the profile object (profile_data JSON in Supabase).
   // `isProSubscriptionActive` checks isPro flag AND subscription_expires_at.
@@ -391,6 +383,8 @@ export function RecipifyApp() {
     setMatchedRecipePool([]);
 
     try {
+      await ensureGuestSession();
+
       // Use preloaded (manual) ingredients if provided, otherwise fall back to
       // state (already-detected) ingredients, then scan the photo if neither exists.
       let detectedIngredients = preloadedIngredients?.length
@@ -398,10 +392,8 @@ export function RecipifyApp() {
         : ingredients;
 
       if (!detectedIngredients.length && currentImage) {
-        const base64 = currentImage.split(",")[1] ?? "";
-        const mimeType = currentImage.split(";")[0]?.split(":")[1] || "image/jpeg";
-        detectedIngredients = await detectFridgeIngredients(base64, mimeType, profile);
-        if (!detectedIngredients.length) detectedIngredients = [...mockIngredients];
+        // Throws on failure, which skips recordScanUsed below: a failed scan is free.
+        detectedIngredients = await scanFridgeIngredients(currentImage, profile);
         setIngredients(detectedIngredients);
       } else if (preloadedIngredients?.length) {
         // Commit manual ingredients to state so the chip list is visible after results
@@ -660,7 +652,11 @@ export function RecipifyApp() {
           </div>
         </main>
       ) : activeTab === "tracker" ? (
-        <FoodTrackerTab profile={profile} />
+        <FoodTrackerTab
+          profile={profile}
+          isPro={effectivePro}
+          onUpgrade={openPaywall}
+        />
       ) : activeTab === "saved" ? (
         <SavedRecipesSection
           favourites={favourites}

@@ -13,6 +13,10 @@ import {
   SIGNUP_SUCCESS_HINT,
 } from "@/lib/authErrors";
 import { markOnboardingCompleteOnDevice } from "@/lib/onboardingGate";
+import { clearGuestFlag } from "@/lib/guestAuth";
+
+const GUEST_UPGRADE_CONFIRM_HINT =
+  "Check your email to confirm your address. Your guest progress is kept in the meantime.";
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_SECONDS = 60;
@@ -85,7 +89,9 @@ function FaceIdIcon() {
 export function LoginPage() {
   const navigate = useNavigate();
   const showToast = useToast();
-  const { session, initializing, signIn, signUp, continueAsGuest } = useAuth();
+  const { session, isAnonymous, initializing, signIn, signUp, upgradeGuest, continueAsGuest } =
+    useAuth();
+  const hasRegisteredSession = Boolean(session) && !isAnonymous;
 
   // Whether this user has logged in before (set on every successful login).
   // Used to distinguish "new user coming from onboarding" vs "returning user".
@@ -135,15 +141,15 @@ export function LoginPage() {
   const passwordRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
 
-  // ── Redirect if already signed in (guests may open /login to create an account) ──
+  // ── Redirect if already signed in. Anonymous guests stay so they can create an account. ──
   useEffect(() => {
     if (initializing) return;
-    if (session) navigate("/", { replace: true });
-  }, [session, initializing, navigate]);
+    if (hasRegisteredSession) navigate("/", { replace: true });
+  }, [hasRegisteredSession, initializing, navigate]);
 
   // ── Biometric eligibility check ─────────────────────────────────────────────
   useEffect(() => {
-    if (initializing || session) return;
+    if (initializing || hasRegisteredSession) return;
     const eligible = window.localStorage.getItem(BIOMETRIC_KEY) === "true";
     const lastEmail = window.localStorage.getItem(LAST_EMAIL_KEY) ?? "";
     if (eligible && lastEmail && Capacitor.isNativePlatform()) {
@@ -151,7 +157,7 @@ export function LoginPage() {
       setEmail(lastEmail);
       setShowBiometric(true);
     }
-  }, [initializing, session]);
+  }, [initializing, hasRegisteredSession]);
 
   // ── Lockout countdown ───────────────────────────────────────────────────────
   const startLockout = useCallback(() => {
@@ -288,7 +294,7 @@ export function LoginPage() {
           return;
         }
         // Success — clear guest flag; onboarding answers stay in localStorage and sync to account
-        window.localStorage.removeItem("chefcoach_guest");
+        clearGuestFlag();
         markOnboardingCompleteOnDevice();
         window.localStorage.setItem(LAST_EMAIL_KEY, email.trim().toLowerCase());
         window.localStorage.setItem(BIOMETRIC_KEY, "true");
@@ -299,7 +305,10 @@ export function LoginPage() {
           triggerShake();
           return;
         }
-        const { error, needsEmailConfirm, accountExists, code } = await signUp(email, password);
+        // Anonymous guests keep their user ID (profile, scans, purchases) by upgrading in place.
+        const { error, needsEmailConfirm, accountExists, code } = isAnonymous
+          ? await upgradeGuest(email, password)
+          : await signUp(email, password);
         if (accountExists) {
           setFormError(ACCOUNT_EXISTS_MESSAGE);
           setShowAccountExistsActions(true);
@@ -314,6 +323,12 @@ export function LoginPage() {
             setFormError(signupErrorMessage(error, code));
           }
           triggerShake();
+          return;
+        }
+        if (needsEmailConfirm && isAnonymous) {
+          showToast(GUEST_UPGRADE_CONFIRM_HINT, "success");
+          window.localStorage.setItem(LAST_EMAIL_KEY, email.trim().toLowerCase());
+          navigate("/", { replace: true });
           return;
         }
         if (needsEmailConfirm) {

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 import type { UserGoal, UserProfile } from "@/types";
 import {
   ChefHatIcon,
@@ -18,7 +18,7 @@ const CHIP_SELECTED =
 const CHIP_UNSELECTED =
   "border-[var(--border)] bg-[var(--white)] text-[var(--text)]";
 
-const GOALS: { k: UserGoal; l: string; Icon: typeof TargetIcon }[] = [
+const GOALS: { k: UserGoal; l: string; Icon: ComponentType<{ className?: string }> }[] = [
   { k: "lose_weight", l: "Lose weight", Icon: TargetIcon },
   { k: "build_muscle", l: "Build muscle", Icon: MacroProteinIcon },
   { k: "maintain_weight", l: "Stay balanced", Icon: Scale },

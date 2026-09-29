@@ -18,7 +18,7 @@ import {
 } from "@/lib/onboardingGate";
 
 function AppRoutes() {
-  const { initializing, session, continueAsGuest } = useAuth();
+  const { initializing, session, isAnonymous, continueAsGuest } = useAuth();
   const splash = useAppSplash(initializing);
 
   const [onboardingDone, setOnboardingDone] = useState<boolean>(() =>
@@ -36,11 +36,12 @@ function AppRoutes() {
   // Show onboarding ONLY when:
   //  1. Auth state is known (not still initializing — avoids flashing onboarding
   //     while Supabase is restoring a session from stored tokens), AND
-  //  2. User is NOT authenticated (returning signed-in users bypass this gate), AND
+  //  2. User has no registered account (returning signed-in users bypass this gate;
+  //     anonymous guests do not), AND
   //  3. Onboarding has never been completed on this device.
   //
   // Logging out does NOT reset this — logout sends the user to /login, not onboarding.
-  const showOnboarding = !initializing && !session && !onboardingDone;
+  const showOnboarding = !initializing && (!session || isAnonymous) && !onboardingDone;
 
   if (showOnboarding) {
     return (

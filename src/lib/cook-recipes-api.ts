@@ -1,6 +1,7 @@
 import type { DietFilter, RecipeResultItem, TimeFilter, UserGoal, UserProfile } from "@/types";
 import { Capacitor } from "@capacitor/core";
 import { apiUrl } from "@/lib/apiBase";
+import { supabase } from "@/lib/supabaseClient";
 import { buildUserDietaryRestrictionsPrompt } from "@/lib/dietConstants";
 import { matchRecipesFromIngredients } from "@/lib/fridge-recipe-match";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
@@ -59,12 +60,29 @@ function mapRecipes(
     .slice(0, count);
 }
 
+type ServerCookResult =
+  | { kind: "ok"; recipes: RecipeResultItem[] }
+  | { kind: "rate_limited" }
+  | { kind: "miss" };
+
+async function authHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  try {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (token) headers.Authorization = `Bearer ${token}`;
+  } catch {
+    /* guest / no session */
+  }
+  return headers;
+}
+
 async function tryServerCookRecipes(
   params: FetchCookRecipesParams
-): Promise<RecipeResultItem[] | null> {
-  // iOS/Android always skip server — bundled app has no local API server
-  if (Capacitor.isNativePlatform()) {
-    return null;
+): Promise<ServerCookResult> {
+  // Native has no loopback API unless a hosted origin is configured.
+  if (Capacitor.isNativePlatform() && !(import.meta.env.VITE_API_BASE_URL || "").trim()) {
+    return { kind: "miss" };
   }
 
   const count = Math.min(6, Math.max(1, params.count ?? 4));
@@ -73,39 +91,26 @@ async function tryServerCookRecipes(
   try {
     const res = await fetchWithTimeout(apiUrl("/api/cook-recipes"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: await authHeaders(),
       body: JSON.stringify(buildRequestBody(params)),
       timeoutMs: 30_000,
     });
 
     const data = (await res.json()) as CookRecipesResponse;
+    if (res.status === 429) {
+      return { kind: "rate_limited" };
+    }
     if (!res.ok) {
       console.warn("[cook-recipes] server error:", data.error ?? res.status);
-      return null;
+      return { kind: "miss" };
     }
 
     const list = Array.isArray(data.recipes) ? data.recipes : [];
     const mapped = mapRecipes(list, params.dietaryPreference, count, excludeTitles);
-    return mapped.length ? mapped : null;
+    return mapped.length ? { kind: "ok", recipes: mapped } : { kind: "miss" };
   } catch (e) {
     console.warn("[cook-recipes] server fetch failed:", e);
-    return null;
-  }
-}
-
-async function tryClientCookRecipes(
-  params: FetchCookRecipesParams
-): Promise<RecipeResultItem[] | null> {
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY || "";
-  if (!apiKey) return null;
-
-  try {
-    const { generateCookRecipesFromOpenAI } = await import("@/lib/generate-cook-recipes");
-    const mapped = await generateCookRecipesFromOpenAI(params);
-    return mapped.length ? mapped : null;
-  } catch (e) {
-    console.warn("[cook-recipes] client OpenAI failed:", e);
-    return null;
+    return { kind: "miss" };
   }
 }
 
@@ -118,7 +123,7 @@ function tryLocalCookRecipes(params: FetchCookRecipesParams): RecipeResultItem[]
 }
 
 /**
- * Generate cook-tab recipes: server (web dev) → client OpenAI → local library fallback.
+ * Generate cook-tab recipes: server → local library fallback (works offline).
  * Never throws if local library can produce recipes.
  */
 export async function fetchCookRecipesFromApi(
@@ -132,13 +137,14 @@ export async function fetchCookRecipesFromApi(
   const withIngredients = { ...params, ingredients };
 
   const fromServer = await tryServerCookRecipes(withIngredients);
-  if (fromServer?.length) {
-    return fromServer;
+  if (fromServer.kind === "ok") {
+    return fromServer.recipes;
   }
 
-  const fromClient = await tryClientCookRecipes(withIngredients);
-  if (fromClient?.length) {
-    return fromClient;
+  if (fromServer.kind === "rate_limited") {
+    const fromLocal = tryLocalCookRecipes(withIngredients);
+    if (fromLocal.length) return fromLocal;
+    throw new Error("Too many recipe requests. Try again in a few minutes.");
   }
 
   const fromLocal = tryLocalCookRecipes(withIngredients);

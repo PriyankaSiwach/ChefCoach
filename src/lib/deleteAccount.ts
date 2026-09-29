@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabaseClient";
 import { apiUrl } from "@/lib/apiBase";
 import { resolveAuthEmail } from "@/lib/trial";
+import { isAnonymousUser } from "@/lib/guestAuth";
 
 const DELETE_RPC = "delete_own_account";
 const CHECK_EMAIL_RPC = "check_email_registered";
@@ -108,12 +109,37 @@ const SETUP_HINT =
   "Account deletion is not configured. Do BOTH: (1) Add SUPABASE_SERVICE_ROLE_KEY to .env.local from Supabase → Settings → API, then restart npm run dev. (2) Run supabase/migrations/005_delete_own_account.sql in Supabase SQL Editor.";
 
 /**
+ * Anonymous guests have no email to verify against, so trust the delete call's
+ * own result: the API deletes by the token's user ID, the RPC by auth.uid().
+ */
+async function deleteAnonymousAccount(accessToken: string): Promise<{ ok: boolean; error?: string }> {
+  const apiResult = await deleteViaApi(accessToken);
+  if (apiResult.ok) return { ok: true };
+
+  const rpcResult = await deleteViaRpc();
+  if (rpcResult.ok) return { ok: true };
+
+  if (apiResult.unavailable && rpcResult.unavailable) {
+    return { ok: false, error: SETUP_HINT };
+  }
+  return {
+    ok: false,
+    error: rpcResult.error || apiResult.error || "Account deletion failed. Please try again.",
+  };
+}
+
+/**
  * Permanently delete auth.users row + profile. Fails unless email is verified gone.
  */
 export async function deleteSupabaseAccount(): Promise<{ ok: boolean; error?: string }> {
   const { data: sessionData } = await supabase.auth.getSession();
   const session = sessionData.session;
   const userId = session?.user?.id;
+
+  if (session && userId && isAnonymousUser(session.user)) {
+    return deleteAnonymousAccount(session.access_token);
+  }
+
   const email = session?.user ? resolveAuthEmail(session.user) : null;
 
   if (!session || !userId || !email) {

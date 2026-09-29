@@ -222,11 +222,16 @@ export async function syncProfileAfterAuth(
     return;
   }
 
-  const remote = normalizeUserProfile(rawRemote);
-  if (!remote) {
+  const normalizedRemote = normalizeUserProfile(rawRemote);
+  if (!normalizedRemote) {
     window.dispatchEvent(new CustomEvent("recipify-profile-sync"));
     return;
   }
+  // Rows written before the avatar became device-only may still carry one; never pull it down.
+  const remote: UserProfile = {
+    ...normalizedRemote,
+    avatarDataUri: local?.avatarDataUri ?? null,
+  };
 
   // Both exist — merge so guest onboarding answers are not lost
   const merged = local ? mergeProfiles(local, remote) : remote;
@@ -247,6 +252,13 @@ export async function pullProfileFromSupabase(
   await syncProfileAfterAuth(userId, email);
 }
 
+/** The profile picture stays on the device; everything else syncs. */
+export function toCloudProfile(profile: UserProfile): UserProfile {
+  const cloud = { ...profile };
+  delete cloud.avatarDataUri;
+  return cloud;
+}
+
 export async function upsertProfileToSupabase(
   userId: string,
   profile: UserProfile
@@ -254,7 +266,7 @@ export async function upsertProfileToSupabase(
   const { error } = await supabase.from("profiles").upsert(
     {
       id: userId,
-      profile_data: profile,
+      profile_data: toCloudProfile(profile),
       updated_at: new Date().toISOString(),
     },
     { onConflict: "id" }

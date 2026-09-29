@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
+import { isRegisteredSession } from "@/lib/guestAuth";
 
 /**
  * Linked from Supabase password recovery email (`redirectTo`).
@@ -18,14 +19,16 @@ export function ResetPasswordPage() {
     let cancelled = false;
     const check = () => {
       void supabase.auth.getSession().then(({ data }) => {
-        if (!cancelled && data.session) setReady(true);
+        if (!cancelled && isRegisteredSession(data.session)) setReady(true);
       });
     };
     check();
+    // An anonymous guest session must not unlock the form; only a recovery link or a real account does.
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!cancelled && session) setReady(true);
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (cancelled) return;
+      if (event === "PASSWORD_RECOVERY" || isRegisteredSession(session)) setReady(true);
     });
     return () => {
       cancelled = true;

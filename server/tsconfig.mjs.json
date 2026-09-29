@@ -1,0 +1,9 @@
+{
+  // Server runtime code (plain JS): strict checks except implicit any, so untyped parameters are allowed.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "checkJs": true,
+    "noImplicitAny": false
+  },
+  "include": ["./**/*.mjs"]
+}

@@ -269,26 +269,45 @@ html {
   transition: stroke-dashoffset 1s ease-out;
 }
 
-/* Food Tracker — scanner viewfinder */
+/* Food Tracker — scanner viewfinder line (bounces up & down) */
 @keyframes foodScanLine {
   0% {
-    transform: translateY(0%);
-    opacity: 0;
+    top: 6%;
+    opacity: 0.35;
   }
-  10% {
+  8%,
+  92% {
     opacity: 1;
   }
-  90% {
+  50% {
+    top: 90%;
     opacity: 1;
   }
   100% {
-    transform: translateY(calc(100% - 2px));
-    opacity: 0;
+    top: 6%;
+    opacity: 0.35;
   }
 }
 
 .food-scan-line {
-  animation: foodScanLine 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(168, 212, 111, 0.35) 15%,
+    #a8d46f 50%,
+    rgba(168, 212, 111, 0.35) 85%,
+    transparent
+  );
+  box-shadow:
+    0 0 10px rgba(168, 212, 111, 0.95),
+    0 0 22px rgba(168, 212, 111, 0.45);
+  animation: foodScanLine 2.6s ease-in-out infinite;
+  pointer-events: none;
 }
 
 @keyframes foodScanFramePulse {

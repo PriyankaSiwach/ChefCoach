@@ -1,101 +1,64 @@
 /**
  * Shared cook-recipes generation (OpenAI). Used by Express (production/API server)
  * and Vite dev middleware so /api/cook-recipes works even if API server is stale or not restarted.
+ *
+ * LRU cache wraps the OpenAI call only — auth and body validation stay unchanged.
  */
 
-function cookTimeMinutesCap(maxCookTime) {
-  if (maxCookTime === "15") return 15;
-  if (maxCookTime === "30") return 30;
-  if (maxCookTime === "60") return 60;
-  return null;
+import { httpError } from "./http-error.mjs";
+import { createLruCache } from "./lru-cache.mjs";
+import { consumeDailyCapOrThrow, getOpenAiDailyCap } from "./daily-cap.mjs";
+import {
+  parseCookRecipesBody,
+  parseRecipesFromModelContent,
+} from "./cook-recipes-validate.mjs";
+
+let cookRecipesCache;
+
+export function getCookRecipesCache() {
+  if (!cookRecipesCache) {
+    const capacity = Number(process.env.COOK_RECIPES_CACHE_CAPACITY) || 100;
+    cookRecipesCache = createLruCache(capacity);
+  }
+  return cookRecipesCache;
 }
 
-function httpError(statusCode, message) {
-  const e = new Error(message);
-  e.statusCode = statusCode;
-  return e;
+/** Stable cache key from validated request fields that affect the model prompt. */
+export function cookRecipesCacheKey(parsed) {
+  const norm = (arr) =>
+    [...arr].map((s) => String(s).trim().toLowerCase()).sort();
+
+  return JSON.stringify({
+    ingredients: norm(parsed.ingredients),
+    dietaryPreference: parsed.dietaryPreference,
+    maxCookTime: parsed.maxCookTime,
+    goal: parsed.goal,
+    allergies: norm(parsed.allergies),
+    dislikedFoods: norm(parsed.dislikedFoods),
+    dietaryRestrictionsPrompt: parsed.dietaryRestrictionsPrompt,
+    count: parsed.count,
+    excludeTitles: norm(parsed.excludeTitles),
+  });
 }
 
-/**
- * @param {Record<string, unknown>} body
- * @returns {Promise<{ recipes: unknown[] }>}
- */
-export async function runCookRecipes(body) {
-  const openAiKey =
-    process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY || "";
+function cloneResult(value) {
+  return typeof structuredClone === "function"
+    ? structuredClone(value)
+    : JSON.parse(JSON.stringify(value));
+}
 
-  if (!openAiKey) {
-    throw httpError(500, "OpenAI is not configured (OPENAI_API_KEY).");
-  }
-
-  const ingredients = Array.isArray(body.ingredients)
-    ? body.ingredients
-        .filter((x) => typeof x === "string" && x.trim().length > 0)
-        .map((s) => s.trim())
-    : [];
-
-  if (ingredients.length === 0) {
-    throw httpError(400, "At least one ingredient is required.");
-  }
-
-  const dietaryPreference =
-    typeof body.dietaryPreference === "string" && body.dietaryPreference.trim()
-      ? body.dietaryPreference.trim()
-      : "None";
-  const maxCookTime =
-    typeof body.maxCookTime === "string" && ["any", "15", "30", "60"].includes(body.maxCookTime)
-      ? body.maxCookTime
-      : "any";
-
-  const goal =
-    typeof body.goal === "string" && body.goal.trim() ? body.goal.trim() : "maintain_weight";
-  const allergies = Array.isArray(body.allergies)
-    ? body.allergies.filter((x) => typeof x === "string" && x.trim())
-    : [];
-  const dislikedFoods = Array.isArray(body.dislikedFoods)
-    ? body.dislikedFoods.filter((x) => typeof x === "string" && x.trim())
-    : [];
-  const dietaryRestrictionsPrompt =
-    typeof body.dietaryRestrictionsPrompt === "string"
-      ? body.dietaryRestrictionsPrompt.trim()
-      : "";
-
-  const cap = cookTimeMinutesCap(maxCookTime);
-  const timeRule =
-    cap == null ? "No strict time limit." : `Active cook + prep must fit within about ${cap} minutes total.`;
-
-  const restrictionLine =
-    dietaryRestrictionsPrompt ||
-    (() => {
-      const parts = [];
-      if (dietaryPreference !== "None") {
-        parts.push(`User is ${dietaryPreference.toLowerCase()}`);
-      }
-      if (allergies.length) {
-        parts.push(`allergic to ${allergies.join(", ").toLowerCase()}`);
-      }
-      if (dislikedFoods.length) {
-        parts.push(`dislikes ${dislikedFoods.join(", ").toLowerCase()}`);
-      }
-      if (!parts.length) return "No specific dietary restrictions listed.";
-      return `${parts.join(", ")} — never include these in any recipe suggestions.`;
-    })();
-
-  const dietRules = [];
-  if (dietaryPreference === "Halal") {
-    dietRules.push("No pork, bacon, ham, or alcohol in any recipe or step.");
-  }
-  if (dietaryPreference === "Pescatarian") {
-    dietRules.push("No meat or poultry; fish and seafood are allowed.");
-  }
-
-  const count =
-    typeof body.count === "number" && Number.isFinite(body.count)
-      ? Math.min(6, Math.max(1, Math.round(body.count)))
-      : 4;
-  const excludeTitles = Array.isArray(body.excludeTitles)
-    ? body.excludeTitles.filter((x) => typeof x === "string" && x.trim()).map((s) => s.trim())
-    : [];
+/** OpenAI call only — no cache. */
+async function generateCookRecipesFromOpenAI(parsed, { openAiKey, fetchImpl }) {
+  const {
+    ingredients,
+    dietaryPreference,
+    goal,
+    timeRule,
+    restrictionLine,
+    dietRules,
+    count,
+    excludeTitles,
+  } = parsed;
 
   const excludeRule =
     excludeTitles.length > 0
@@ -123,7 +86,7 @@ User ingredients (JSON array): ${JSON.stringify(ingredients)}`;
 
   let response;
   try {
-    response = await fetch("https://api.openai.com/v1/chat/completions", {
+    response = await fetchImpl("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -148,20 +111,43 @@ User ingredients (JSON array): ${JSON.stringify(ingredients)}`;
   }
 
   const data = await response.json();
-  let raw = data?.choices?.[0]?.message?.content?.trim?.() ?? "";
-  raw = raw.replace(/```json/gi, "").replace(/```/g, "").trim();
-
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw httpError(502, "Could not parse recipe response.");
-  }
-
-  const recipes = Array.isArray(parsed.recipes) ? parsed.recipes : [];
-  if (recipes.length === 0) {
-    throw httpError(502, "No recipes in response.");
-  }
-
+  const raw = data?.choices?.[0]?.message?.content?.trim?.() ?? "";
+  const recipes = parseRecipesFromModelContent(raw);
   return { recipes };
+}
+
+/**
+ * Validate → LRU cache → daily cap → OpenAI on miss. Cache hits do not count toward the cap.
+ * @param {Record<string, unknown>} body
+ * @param {{
+ *   cache?: ReturnType<typeof createLruCache>,
+ *   fetchImpl?: typeof fetch,
+ *   dailyCap?: { tryConsume: () => { allowed: boolean, retryAfterMs: number } },
+ * }} [deps]
+ * @returns {Promise<{ recipes: unknown[] }>}
+ */
+export async function runCookRecipes(body, deps = {}) {
+  const openAiKey = process.env.OPENAI_API_KEY || "";
+
+  if (!openAiKey) {
+    throw httpError(500, "OpenAI is not configured (OPENAI_API_KEY).");
+  }
+
+  const parsed = parseCookRecipesBody(body ?? {});
+  const cache = deps.cache ?? getCookRecipesCache();
+  const key = cookRecipesCacheKey(parsed);
+
+  const cached = cache.get(key);
+  if (cached) {
+    return cloneResult(cached);
+  }
+
+  consumeDailyCapOrThrow(deps.dailyCap ?? getOpenAiDailyCap());
+
+  const result = await generateCookRecipesFromOpenAI(parsed, {
+    openAiKey,
+    fetchImpl: deps.fetchImpl ?? globalThis.fetch,
+  });
+  cache.set(key, cloneResult(result));
+  return result;
 }

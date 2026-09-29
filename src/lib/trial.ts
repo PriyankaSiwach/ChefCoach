@@ -1,19 +1,27 @@
 /**
- * Fridge-scan trial gate.
+ * AI scan trial gates.
  *
- * Free tier: 3 lifetime scans.
- * Tracks scansUsed (0→3) locally in localStorage and syncs to Supabase
- * in the background so reinstalls / new devices respect the server value.
+ * Free tier:
+ *   - Cook (fridge): 3 lifetime scans (`recipify_scans_used`)
+ *   - Track (food):  3 lifetime scans (`chefcoach_tracker_scans_used`)
+ *   Total: 6 free AI scans.
  *
- * Storage key: "recipify_scans_used" (integer, counts UP from 0).
- * Legacy key:  "recipify_trial_scans" (counts DOWN from 3) — migrated on read.
+ * Pro / bypass emails: unlimited for both.
  */
 
 import { supabase } from "@/lib/supabaseClient";
+import {
+  incrementUsedCount,
+  isQuotaExhausted,
+  remainingScans,
+} from "@/lib/scanQuota";
 
 export const FREE_SCAN_LIMIT = 3;
+/** Separate free quota for Food Tracker (not shared with Cook). */
+export const FREE_TRACKER_SCAN_LIMIT = 3;
 
 const KEY_SCANS_USED = "recipify_scans_used";
+const KEY_TRACKER_SCANS_USED = "chefcoach_tracker_scans_used";
 const KEY_SCANS_LEGACY = "recipify_trial_scans"; // old remaining-based key
 const KEY_ENDED_LEGACY = "recipify_trial_ended";
 const KEY_EMAIL = "recipify_email";
@@ -155,13 +163,16 @@ export function getScansUsed(): number {
 
 /** How many free scans remain (0 means exhausted). */
 export function getTrialScansRemaining(): number {
-  return Math.max(0, FREE_SCAN_LIMIT - getScansUsed());
+  return remainingScans(getScansUsed(), FREE_SCAN_LIMIT);
 }
 
 /** True when all free scans are used up. */
 export function isTrialExhausted(): boolean {
-  if (isTrialScanBypassActive()) return false;
-  return getScansUsed() >= FREE_SCAN_LIMIT;
+  return isQuotaExhausted(
+    getScansUsed(),
+    FREE_SCAN_LIMIT,
+    isTrialScanBypassActive()
+  );
 }
 
 /**
@@ -179,9 +190,9 @@ export function getTrialEnded(): boolean {
  * Returns the new local scansUsed count.
  */
 export function recordScanUsed(userId?: string | null): number {
-  if (isTrialScanBypassActive()) return getScansUsed();
-
-  const next = readLocalScansUsed() + 1;
+  const bypass = isTrialScanBypassActive();
+  const next = incrementUsedCount(readLocalScansUsed(), bypass);
+  if (bypass) return next;
   writeLocalScansUsed(next);
 
   // Patch the local profile JSON so RecipifyApp can derive isPro/scans from profile
@@ -244,3 +255,49 @@ export function migrateTrialState(): void {
  * @deprecated no-op — use writeLocalScansUsed directly.
  */
 export function setTrialEnded(_value: boolean): void { /* no-op */ }
+
+// ─── Food Tracker free scans (separate from Cook) ─────────────────────────────
+
+function readLocalTrackerScansUsed(): number {
+  if (typeof window === "undefined") return 0;
+  try {
+    const raw = window.localStorage.getItem(KEY_TRACKER_SCANS_USED);
+    if (raw === null) return 0;
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) ? Math.max(0, n) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeLocalTrackerScansUsed(n: number): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(KEY_TRACKER_SCANS_USED, String(Math.max(0, n)));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** How many lifetime Food Tracker scans this user has performed. */
+export function getTrackerScansUsed(): number {
+  return readLocalTrackerScansUsed();
+}
+
+/** True when all free Food Tracker scans are used up. */
+export function isTrackerTrialExhausted(): boolean {
+  return isQuotaExhausted(
+    getTrackerScansUsed(),
+    FREE_TRACKER_SCAN_LIMIT,
+    isTrialScanBypassActive()
+  );
+}
+
+/** Record one Food Tracker scan. Returns the new used count. */
+export function recordTrackerScanUsed(): number {
+  const bypass = isTrialScanBypassActive();
+  const next = incrementUsedCount(readLocalTrackerScansUsed(), bypass);
+  if (bypass) return next;
+  writeLocalTrackerScansUsed(next);
+  return next;
+}

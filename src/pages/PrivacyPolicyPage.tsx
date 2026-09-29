@@ -68,24 +68,26 @@ export function PrivacyPolicyPage() {
             <SubSection title="1.2 Profile &amp; Preference Data">
               <p>We store the preferences you choose inside the App, including:</p>
               <ul className="ml-4 list-disc space-y-1">
-                <li>Display name and avatar</li>
+                <li>Display name</li>
                 <li>Dietary preferences (vegan, gluten-free, etc.) and food allergies</li>
                 <li>Cuisine preferences and cooking-skill level</li>
                 <li>Meal goals (weight loss, muscle gain, balanced nutrition, etc.)</li>
               </ul>
               <p>
                 This data is stored on our servers (Supabase) and is linked to your account. It is
-                used solely to personalise recipes and meal plans.
+                used solely to personalise recipes and meal plans. Your profile picture stays on
+                your device and is never uploaded.
               </p>
             </SubSection>
 
-            <SubSection title="1.3 Fridge Photos">
+            <SubSection title="1.3 Photos">
               <p>
-                When you use the fridge-scan feature, you take or upload a photo. That image is
-                sent securely to <strong>OpenAI</strong> for ingredient detection and is{" "}
-                <strong>not retained</strong> by OpenAI beyond the single API call (per OpenAI's
-                zero-data-retention policy for the vision endpoint). We do not permanently store
-                your fridge photos on our servers.
+                When you scan your fridge or a meal, the photo is sent from the App to our server,
+                which forwards it to <strong>OpenAI</strong> to identify ingredients or estimate
+                nutrition and returns only the result to you. Our server does not store or log your
+                photos; they are held in memory only while your request is processed. OpenAI
+                processes photos under its API data-usage policies. Food Tracker keeps a small
+                thumbnail of meals you save on your device only; it is never uploaded.
               </p>
             </SubSection>
 
@@ -154,7 +156,10 @@ export function PrivacyPolicyPage() {
                 <tbody className="divide-y divide-[var(--border)]">
                   {[
                     ["Supabase", "Authentication and profile storage"],
-                    ["OpenAI", "Fridge photo ingredient detection and recipe generation"],
+                    [
+                      "OpenAI",
+                      "Photo ingredient detection, meal nutrition estimates, and recipe generation (through our server)",
+                    ],
                     ["RevenueCat", "In-App Purchase subscription management"],
                     ["Apple Sign In", "Third-party authentication"],
                     ["Google Sign In", "Third-party authentication"],

@@ -51,7 +51,7 @@ type Props = {
   /** Pass current profile so iap.ts can patch it in-place after purchase. */
   currentProfile: UserProfile | null;
   setProfile: (p: UserProfile) => void;
-  /** True when the user is browsing as a guest (no Supabase session). */
+  /** True when the user is browsing as a guest (anonymous Supabase user, or local-only fallback). */
   isGuest?: boolean;
 };
 

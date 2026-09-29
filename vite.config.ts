@@ -108,11 +108,21 @@ function devApiPlugin(): Plugin {
 
         try {
           const body = await readJsonBody();
-          const { runCookRecipes } = await import("./server/cook-recipes-logic.mjs");
-          const out = await runCookRecipes(body);
-          res.statusCode = 200;
+          const { handleCookRecipesRequest } = await import("./server/cook-recipes-http.mjs");
+          const { clientIp } = await import("./server/client-ip.mjs");
+          const out = await handleCookRecipesRequest({
+            authorization: req.headers.authorization,
+            body,
+            ip: clientIp(req),
+          });
+          res.statusCode = out.status;
+          if (out.headers) {
+            for (const [key, value] of Object.entries(out.headers)) {
+              res.setHeader(key, value);
+            }
+          }
           res.setHeader("Content-Type", "application/json");
-          res.end(JSON.stringify(out));
+          res.end(JSON.stringify(out.json));
         } catch (e: unknown) {
           if ((e as Error).message === "invalid_json") return;
           const err = e as { statusCode?: number; message?: string };
@@ -153,6 +163,10 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api/auth": {
+        target: `http://127.0.0.1:${Number(process.env.API_PORT) || 3001}`,
+        changeOrigin: true,
+      },
+      "/api/vision": {
         target: `http://127.0.0.1:${Number(process.env.API_PORT) || 3001}`,
         changeOrigin: true,
       },

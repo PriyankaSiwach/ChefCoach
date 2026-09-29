@@ -25,11 +25,19 @@ import {
   isAccountExistsAuthError,
   signUpIndicatesExistingAccount,
 } from "@/lib/authErrors";
+import {
+  clearGuestFlag,
+  ensureAnonymousSession,
+  getOrCreateGuestId,
+  isAnonymousUser,
+  isRegisteredSession,
+  readGuestFlag,
+  retryGuestSessionIfNeeded,
+  setGuestFlag,
+  upgradeAnonymousAccount,
+} from "@/lib/guestAuth";
 
 const OAUTH_CALLBACK_SCHEME = "com.chefcoach.app://auth/callback";
-
-// Persists across sessions — never wiped by clearRecipifyLocalSession.
-const ONBOARDING_DONE_KEY = "chefcoach_onboarding_done";
 
 function ensureGuestProfileInStorage(): void {
   if (typeof window === "undefined") return;
@@ -55,28 +63,29 @@ function ensureGuestProfileInStorage(): void {
   }
 }
 
-const GUEST_MODE_KEY = "chefcoach_guest";
-const GUEST_ID_KEY   = "chefcoach_guest_id";
-
-function getOrCreateGuestId(): string {
-  if (typeof window === "undefined") return "guest";
-  let id = window.localStorage.getItem(GUEST_ID_KEY);
-  if (!id) {
-    id = `guest_${Math.random().toString(36).slice(2, 10)}_${Date.now()}`;
-    window.localStorage.setItem(GUEST_ID_KEY, id);
-  }
-  return id;
-}
-
 type AuthContextValue = {
   session: Session | null;
   user: User | null;
   initializing: boolean;
-  /** True when the user chose "Continue as Guest" — no Supabase session. */
+  /** True for an anonymous Supabase session, or local guest mode when there is no session. */
   isGuest: boolean;
+  /** True when the current Supabase session belongs to an anonymous user. */
+  isAnonymous: boolean;
   /** Guest's stable local ID used for RevenueCat customer identification. */
   guestId: string | null;
   continueAsGuest: () => void;
+  /** Retry anonymous sign-in for a local-only guest. Never throws; resolves within a few seconds. */
+  ensureGuestSession: () => Promise<void>;
+  /** Turn the current anonymous user into an email/password account (same user ID). */
+  upgradeGuest: (
+    email: string,
+    password: string
+  ) => Promise<{
+    error: string | null;
+    code?: string | null;
+    accountExists?: boolean;
+    needsEmailConfirm?: boolean;
+  }>;
   signIn: (
     email: string,
     password: string
@@ -100,20 +109,20 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [initializing, setInitializing] = useState(true);
-  const [isGuest, setIsGuest] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem(GUEST_MODE_KEY) === "1";
-  });
-  const [guestId, setGuestId] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    return window.localStorage.getItem(GUEST_MODE_KEY) === "1"
-      ? getOrCreateGuestId()
-      : null;
-  });
+  /** Local guest flag; only consulted when there is no session. */
+  const [localGuest, setLocalGuest] = useState<boolean>(() => readGuestFlag());
+  const [guestId, setGuestId] = useState<string | null>(() =>
+    readGuestFlag() ? getOrCreateGuestId() : null
+  );
+
+  const isAnonymous = isAnonymousUser(session?.user);
+  const isGuest = session ? isAnonymous : localGuest;
 
   const syncEmailForLegacyApis = useCallback((s: Session | null) => {
     if (typeof window === "undefined") return;
-    const email = s?.user ? resolveAuthEmail(s.user) : null;
+    // Anonymous users have no email; clearing the stored one stops them from
+    // inheriting a previous account's email (and its Pro exception).
+    const email = s?.user && !isAnonymousUser(s.user) ? resolveAuthEmail(s.user) : null;
     storeAuthEmail(email);
   }, []);
 
@@ -136,24 +145,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(s);
         syncEmailForLegacyApis(s);
 
-        // Restore guest session when onboarding was completed on this device.
-        if (
-          !s &&
-          typeof window !== "undefined" &&
-          window.localStorage.getItem(ONBOARDING_DONE_KEY) === "1" &&
-          window.localStorage.getItem(GUEST_MODE_KEY) === "1"
-        ) {
-          const id = getOrCreateGuestId();
+        // Legacy guests (local flag, no session): keep local guest mode for this
+        // launch and silently upgrade to an anonymous session. SIGNED_IN will
+        // replace local mode if it succeeds; on failure we retry next launch.
+        if (!s && readGuestFlag()) {
           ensureGuestProfileInStorage();
-          setIsGuest(true);
-          setGuestId(id);
+          setLocalGuest(true);
+          setGuestId(getOrCreateGuestId());
+          void retryGuestSessionIfNeeded(supabase).then((result) => {
+            if (result && !result.ok) {
+              console.error("[Auth] Anonymous guest sign-in failed; staying in local guest mode:", result.error);
+            }
+          });
         }
 
         // Profile + subscription sync runs in background — don't block first paint
         void (async () => {
           try {
             if (s?.user?.id) {
-              const email = resolveAuthEmail(s.user);
+              const email = isAnonymousUser(s.user) ? null : resolveAuthEmail(s.user);
               await pullProfileFromSupabase(s.user.id, email);
               await ensureProBypassForUser(s.user.id, email);
             }
@@ -177,12 +187,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       syncEmailForLegacyApis(nextSession);
 
       // Never await inside this listener — it can deadlock signOut (Supabase auth-js).
-      if (event === "SIGNED_IN" && nextSession?.user?.id) {
+      if (event === "SIGNED_IN" && nextSession?.user?.id && isAnonymousUser(nextSession.user)) {
+        // Guest received an anonymous session: stay a guest, keep the local flag,
+        // and back the onboarding profile up to this user's row.
+        const userId = nextSession.user.id;
+        void pullProfileFromSupabase(userId, null).catch((e) => {
+          console.warn("[Auth] Anonymous profile sync failed:", e);
+        });
+      } else if (event === "SIGNED_IN" && nextSession?.user?.id) {
         // Leaving guest mode — migrate local onboarding profile to the account.
-        if (typeof window !== "undefined") {
-          window.localStorage.removeItem(GUEST_MODE_KEY);
-        }
-        setIsGuest(false);
+        clearGuestFlag();
+        setLocalGuest(false);
         setGuestId(null);
 
         const resolvedEmail = resolveAuthEmail(nextSession.user);
@@ -206,6 +221,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })();
 
         void maybePromptNotificationPermissionAfterLogin();
+      }
+      // Guest upgrade (updateUser email + password) completes: the same user is
+      // no longer anonymous, so leave guest mode.
+      if (event === "USER_UPDATED" && isRegisteredSession(nextSession) && readGuestFlag()) {
+        clearGuestFlag();
+        setLocalGuest(false);
+        setGuestId(null);
+        storeAuthEmail(resolveAuthEmail(nextSession.user));
       }
       if (event === "SIGNED_OUT") {
         clearRecipifyLocalSession();
@@ -319,11 +342,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const continueAsGuest = useCallback(() => {
-    const id = getOrCreateGuestId();
-    window.localStorage.setItem(GUEST_MODE_KEY, "1");
+    setGuestFlag();
     ensureGuestProfileInStorage();
-    setIsGuest(true);
-    setGuestId(id);
+    setLocalGuest(true);
+    setGuestId(getOrCreateGuestId());
+    // Local guest mode is usable immediately; SIGNED_IN swaps in the anonymous session.
+    void ensureAnonymousSession(supabase).then((result) => {
+      if (!result.ok) {
+        console.error("[Auth] Anonymous guest sign-in failed; staying in local guest mode:", result.error);
+      }
+    });
+  }, []);
+
+  const ensureGuestSession = useCallback(async () => {
+    const result = await retryGuestSessionIfNeeded(supabase, { timeoutMs: 5_000 });
+    if (result && !result.ok) {
+      console.error("[Auth] Anonymous guest sign-in retry failed:", result.error);
+    }
+  }, []);
+
+  const upgradeGuest = useCallback(async (email: string, password: string) => {
+    const result = await upgradeAnonymousAccount(supabase, email, password);
+    if (result.error) {
+      return {
+        ...result,
+        accountExists: isAccountExistsAuthError({
+          message: result.error,
+          code: result.code ?? undefined,
+        }),
+      };
+    }
+    return result;
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
@@ -359,8 +408,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     // Clear guest mode so next launch goes to login
-    window.localStorage.removeItem(GUEST_MODE_KEY);
-    setIsGuest(false);
+    clearGuestFlag();
+    setLocalGuest(false);
     setGuestId(null);
 
     clearRecipifyLocalSession();
@@ -393,8 +442,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    window.localStorage.removeItem(GUEST_MODE_KEY);
-    setIsGuest(false);
+    clearGuestFlag();
+    setLocalGuest(false);
     setGuestId(null);
     clearAccountOnDevice();
     syncEmailForLegacyApis(null);
@@ -422,14 +471,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user: session?.user ?? null,
       initializing,
       isGuest,
+      isAnonymous,
       guestId,
       continueAsGuest,
+      ensureGuestSession,
+      upgradeGuest,
       signIn,
       signUp,
       signOut,
       deleteAccount,
     }),
-    [session, initializing, isGuest, guestId, continueAsGuest, signIn, signUp, signOut, deleteAccount]
+    [
+      session,
+      initializing,
+      isGuest,
+      isAnonymous,
+      guestId,
+      continueAsGuest,
+      ensureGuestSession,
+      upgradeGuest,
+      signIn,
+      signUp,
+      signOut,
+      deleteAccount,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
