@@ -5,7 +5,7 @@ import { createApp } from "./app.mjs";
 
 const seen: Array<{ route: string; ip: string; bodyBytes: number }> = [];
 const record = (route: string) => async ({ ip = "", body }: { ip?: string; body?: unknown } = {}) => {
-  seen.push({ route, ip, bodyBytes: JSON.stringify(body).length });
+  seen.push({ route, ip, bodyBytes: JSON.stringify(body ?? null).length });
   return { status: 200, json: { ok: true } };
 };
 
@@ -18,6 +18,7 @@ beforeAll(async () => {
       cookRecipes: record("cook"),
       fridgeVision: record("fridge"),
       foodVision: record("food"),
+      subscriptionRefresh: record("subscription"),
     },
   });
   await new Promise<void>((resolve) => {
@@ -80,6 +81,12 @@ describe("Express app", () => {
   it("uses X-Forwarded-For from one proxy hop as the client IP", async () => {
     await post("/api/vision/food", "{}", { "X-Forwarded-For": "203.0.113.50" });
     expect(seen[0].ip).toBe("203.0.113.50");
+  });
+
+  it("routes POST /api/subscription/refresh with the client IP", async () => {
+    const res = await post("/api/subscription/refresh", "{}", { "X-Forwarded-For": "203.0.113.60" });
+    expect(res.status).toBe(200);
+    expect(seen[0]).toMatchObject({ route: "subscription", ip: "203.0.113.60" });
   });
 
   it("allows the Capacitor iOS origin", async () => {

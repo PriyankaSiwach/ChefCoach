@@ -4,6 +4,7 @@ import { checkEmailExistsInSupabase } from "./auth-email-exists.mjs";
 import { deleteAccountForToken } from "./delete-account.mjs";
 import { handleCookRecipesRequest } from "./cook-recipes-http.mjs";
 import { handleFoodVisionRequest, handleFridgeVisionRequest } from "./vision-http.mjs";
+import { handleSubscriptionRefreshRequest } from "./subscription-refresh.mjs";
 import { clientIp } from "./client-ip.mjs";
 
 const VISION_PATH_PREFIX = "/api/vision/";
@@ -23,6 +24,7 @@ function sendHandlerResult(res, out) {
  *     cookRecipes?: typeof handleCookRecipesRequest,
  *     fridgeVision?: typeof handleFridgeVisionRequest,
  *     foodVision?: typeof handleFoodVisionRequest,
+ *     subscriptionRefresh?: typeof handleSubscriptionRefreshRequest,
  *   },
  * }} [options]
  */
@@ -30,6 +32,7 @@ export function createApp({ handlers = {} } = {}) {
   const cookRecipes = handlers.cookRecipes ?? handleCookRecipesRequest;
   const fridgeVision = handlers.fridgeVision ?? handleFridgeVisionRequest;
   const foodVision = handlers.foodVision ?? handleFoodVisionRequest;
+  const subscriptionRefresh = handlers.subscriptionRefresh ?? handleSubscriptionRefreshRequest;
 
   const allowedOrigins = [
     "http://localhost:5173",
@@ -124,6 +127,14 @@ export function createApp({ handlers = {} } = {}) {
     const out = await foodVision({
       authorization: req.headers.authorization,
       body: req.body ?? {},
+      ip: clientIp(req),
+    });
+    sendHandlerResult(res, out);
+  });
+
+  app.post("/api/subscription/refresh", async (req, res) => {
+    const out = await subscriptionRefresh({
+      authorization: req.headers.authorization,
       ip: clientIp(req),
     });
     sendHandlerResult(res, out);
