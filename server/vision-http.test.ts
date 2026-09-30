@@ -5,6 +5,7 @@ import { consumeDailyCapOrThrow, createDailyCap } from "./daily-cap.mjs";
 import { runFridgeVision } from "./vision-logic.mjs";
 import { jpegBase64 } from "./test-images";
 import { jsonResponse, mockFetch, openAiReply } from "./test-fetch";
+import { proQuota } from "./test-quota";
 
 const SECRET_PHOTO = jpegBase64("PHOTO-SECRET-MARKER-0123456789");
 
@@ -18,6 +19,7 @@ function deps(overrides = {}) {
     userLimiter: createTokenBucketLimiter({ capacity: 2, refillIntervalMs: 60_000 }),
     ipLimiter: createTokenBucketLimiter({ capacity: 5, refillIntervalMs: 60_000 }),
     analyze: vi.fn(async () => ({ ingredients: ["eggs"] })),
+    quota: proQuota(),
     ...overrides,
   };
 }

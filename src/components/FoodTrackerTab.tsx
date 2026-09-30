@@ -17,8 +17,10 @@ import {
   FREE_TRACKER_SCAN_LIMIT,
   getTrackerScansUsed,
   isTrackerTrialExhausted,
+  markTrackFreeScansUsedUp,
   recordTrackerScanUsed,
 } from "@/lib/trial";
+import { FreeScansUsedError } from "@/lib/freeScansError";
 import { NutritionDisclaimer } from "@/components/NutritionDisclaimer";
 import { TrackerTabIcon } from "@/components/icons/TabIcons";
 import {
@@ -239,6 +241,17 @@ export function FoodTrackerTab({
         setScanTick((t) => t + 1);
       }
     } catch (err) {
+      if (err instanceof FreeScansUsedError) {
+        markTrackFreeScansUsedUp();
+        setScanTick((t) => t + 1);
+        if (onUpgrade) {
+          closeScanner();
+          onUpgrade();
+        } else {
+          showUpgradePrompt();
+        }
+        return;
+      }
       setErrorMsg(err instanceof Error ? err.message : "Something went wrong. Try again.");
       setPhase("error");
     }

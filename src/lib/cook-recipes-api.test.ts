@@ -9,6 +9,7 @@ vi.mock("@/lib/supabaseClient", () => ({ supabase: { auth: { getSession } } }));
 vi.mock("@capacitor/core", () => ({ Capacitor: { isNativePlatform } }));
 
 import { fetchCookRecipesFromApi } from "./cook-recipes-api";
+import { FreeScansUsedError } from "./freeScansError";
 
 const fetchMock = vi.fn();
 const params = {
@@ -46,6 +47,18 @@ describe("fetchCookRecipesFromApi without a client OpenAI path", () => {
     const recipes = await fetchCookRecipesFromApi(params);
     expect(recipes.length).toBeGreaterThan(0);
     expect(calledUrls()).toEqual(["/api/cook-recipes"]);
+  });
+
+  it("402 free scans used → FreeScansUsedError('cook'), with no built-in library fallback", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: "You've used your 3 free Cook scans.", code: "free_scans_used" }), {
+        status: 402,
+      })
+    );
+    const err = await fetchCookRecipesFromApi(params).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(FreeScansUsedError);
+    expect((err as FreeScansUsedError).kind).toBe("cook");
+    expect((err as FreeScansUsedError).message).toBe("You've used your 3 free Cook scans.");
   });
 
   it("native build with no VITE_API_BASE_URL goes straight to the built-in library", async () => {

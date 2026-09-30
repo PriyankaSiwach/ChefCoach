@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { buildUserDietaryRestrictionsPrompt } from "@/lib/dietConstants";
 import { matchRecipesFromIngredients } from "@/lib/fridge-recipe-match";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
+import { FreeScansUsedError, freeScansUsedFrom } from "@/lib/freeScansError";
 import {
   mapCookRecipeToResultItem,
   type CookRecipeRaw,
@@ -63,6 +64,7 @@ function mapRecipes(
 type ServerCookResult =
   | { kind: "ok"; recipes: RecipeResultItem[] }
   | { kind: "rate_limited" }
+  | { kind: "free_scans_used"; error: FreeScansUsedError }
   | { kind: "miss" };
 
 async function authHeaders(): Promise<Record<string, string>> {
@@ -96,6 +98,10 @@ async function tryServerCookRecipes(
       timeoutMs: 30_000,
     });
 
+    if (res.status === 402) {
+      return { kind: "free_scans_used", error: await freeScansUsedFrom(res, "cook") };
+    }
+
     const data = (await res.json()) as CookRecipesResponse;
     if (res.status === 429) {
       return { kind: "rate_limited" };
@@ -124,7 +130,8 @@ function tryLocalCookRecipes(params: FetchCookRecipesParams): RecipeResultItem[]
 
 /**
  * Generate cook-tab recipes: server → local library fallback (works offline).
- * Never throws if local library can produce recipes.
+ * Throws FreeScansUsedError when the server says the free Cook scans are used (no fallback);
+ * otherwise never throws if local library can produce recipes.
  */
 export async function fetchCookRecipesFromApi(
   params: FetchCookRecipesParams
@@ -139,6 +146,10 @@ export async function fetchCookRecipesFromApi(
   const fromServer = await tryServerCookRecipes(withIngredients);
   if (fromServer.kind === "ok") {
     return fromServer.recipes;
+  }
+
+  if (fromServer.kind === "free_scans_used") {
+    throw fromServer.error;
   }
 
   if (fromServer.kind === "rate_limited") {

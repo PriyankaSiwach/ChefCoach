@@ -9,6 +9,7 @@ export default tseslint.config(
   {
     files: [
       "src/lib/**/*.ts",
+      "src/hooks/**/*.ts",
       "src/test/**/*.ts",
       "src/**/*.test.ts",
       "server/**/*.test.ts",

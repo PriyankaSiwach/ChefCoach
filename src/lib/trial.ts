@@ -173,6 +173,11 @@ export function recordScanUsed(userId?: string | null): number {
   return next;
 }
 
+/** The server said the free Cook scans are used: make the on-device counter agree. */
+export function markCookFreeScansUsedUp(): void {
+  if (readLocalScansUsed() < FREE_SCAN_LIMIT) writeLocalScansUsed(FREE_SCAN_LIMIT);
+}
+
 /**
  * @deprecated kept for callers in RecipifyApp.tsx that haven't been updated yet.
  * Calls {@link recordScanUsed} and returns remaining.
@@ -252,6 +257,13 @@ export function getTrackerScansUsed(): number {
 /** True when all free Food Tracker scans are used up. */
 export function isTrackerTrialExhausted(): boolean {
   return isQuotaExhausted(getTrackerScansUsed(), FREE_TRACKER_SCAN_LIMIT);
+}
+
+/** The server said the free Track scans are used: make the on-device counter agree. */
+export function markTrackFreeScansUsedUp(): void {
+  if (readLocalTrackerScansUsed() < FREE_TRACKER_SCAN_LIMIT) {
+    writeLocalTrackerScansUsed(FREE_TRACKER_SCAN_LIMIT);
+  }
 }
 
 /** Record one Food Tracker scan. Returns the new used count. */

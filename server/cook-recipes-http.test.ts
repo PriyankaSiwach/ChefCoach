@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { handleCookRecipesRequest } from "./cook-recipes-http.mjs";
 import { createTokenBucketLimiter } from "./rate-limit.mjs";
 import { httpError } from "./http-error.mjs";
+import { proQuota } from "./test-quota";
 
 function deps(overrides = {}) {
   return {
+    quota: proQuota(),
     verifyUser: async (token: string) =>
       token === "good"
         ? { ok: true as const, userId: "user-1" }

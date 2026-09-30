@@ -7,6 +7,7 @@ import { apiUrl, BackendNotConfiguredError, BACKEND_NOT_CONFIGURED_MESSAGE } fro
 import { supabase } from "@/lib/supabaseClient";
 import { compressImageDataUrl } from "@/lib/compressImageDataUrl";
 import { fetchWithTimeout } from "@/lib/fetchWithTimeout";
+import { freeScansUsedFrom } from "@/lib/freeScansError";
 import { profilePromptExtras } from "@/lib/profile-prompt";
 import type { FoodScanConfidence, FoodScanResult } from "@/lib/foodTracker";
 
@@ -125,6 +126,7 @@ async function postVision(
     throw new VisionScanError("unreachable", UNREACHABLE_MESSAGE[scan]);
   }
 
+  if (res.status === 402) throw await freeScansUsedFrom(res, scan === "fridge" ? "cook" : "track");
   if (!res.ok) throw await toVisionError(res, scan);
 
   try {
@@ -134,7 +136,10 @@ async function postVision(
   }
 }
 
-/** Fridge photo → ingredient names. Throws VisionScanError; never returns placeholder ingredients. */
+/**
+ * Fridge photo → ingredient names. Throws VisionScanError, or FreeScansUsedError when the
+ * server says the free Cook scans are used; never returns placeholder ingredients.
+ */
 export async function scanFridgeIngredients(
   dataUrl: string,
   profile?: UserProfile | null
@@ -155,7 +160,7 @@ export async function scanFridgeIngredients(
 
 const CONFIDENCE: FoodScanConfidence[] = ["high", "medium", "low"];
 
-/** Meal photo → nutrition estimate. Throws VisionScanError. */
+/** Meal photo → nutrition estimate. Throws VisionScanError, or FreeScansUsedError (free Track scans used). */
 export async function scanFoodNutrition(dataUrl: string): Promise<FoodScanResult> {
   const image = await compressForUpload(dataUrl);
   const d = (await postVision("food", image)) as Partial<Record<keyof FoodScanResult, unknown>>;

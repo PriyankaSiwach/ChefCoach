@@ -36,7 +36,14 @@ import { syncProOnLaunch } from "@/lib/iap";
 import { useIsPro } from "@/hooks/useIsPro";
 import { redirectToLoginAfterAccountReset } from "@/lib/session";
 import { PaywallScreen } from "./PaywallScreen";
-import { isTrialExhausted, migrateTrialState, recordScanUsed, resolveAuthEmail } from "@/lib/trial";
+import {
+  isTrialExhausted,
+  markCookFreeScansUsedUp,
+  migrateTrialState,
+  recordScanUsed,
+  resolveAuthEmail,
+} from "@/lib/trial";
+import { FreeScansUsedError } from "@/lib/freeScansError";
 import {
   defaultUserProfile,
   readProfileFromStorage,
@@ -384,6 +391,12 @@ export function RecipifyApp() {
         }
       }
     } catch (err) {
+      if (err instanceof FreeScansUsedError) {
+        markCookFreeScansUsedUp();
+        setScanCountTick((t) => t + 1);
+        setPaywallOpen(true);
+        return;
+      }
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setLoading(false);
@@ -421,6 +434,12 @@ export function RecipifyApp() {
         return [...prev, ...unique].slice(0, COOK_MAX_RECIPES);
       });
     } catch (err) {
+      if (err instanceof FreeScansUsedError) {
+        markCookFreeScansUsedUp();
+        setScanCountTick((t) => t + 1);
+        setPaywallOpen(true);
+        return;
+      }
       setError(err instanceof Error ? err.message : "Could not generate more recipes.");
     } finally {
       setLoadingMore(false);

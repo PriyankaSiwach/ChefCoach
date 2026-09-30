@@ -19,6 +19,8 @@ import {
   getTrialScansRemaining,
   isTrackerTrialExhausted,
   isTrialExhausted,
+  markCookFreeScansUsedUp,
+  markTrackFreeScansUsedUp,
   recordScanUsed,
   recordTrackerScanUsed,
 } from "@/lib/trial";
@@ -65,6 +67,20 @@ describe("trial local quota", () => {
     recordScanUsed();
     expect(getScansUsed()).toBe(3);
     expect(isTrialExhausted()).toBe(true);
+  });
+
+  it("a server 402 makes the on-device counters show no free scans left", () => {
+    recordScanUsed();
+    markCookFreeScansUsedUp();
+    markTrackFreeScansUsedUp();
+    expect(isTrialExhausted()).toBe(true);
+    expect(isTrackerTrialExhausted()).toBe(true);
+  });
+
+  it("marking scans used up never lowers a higher count", () => {
+    window.localStorage.setItem("recipify_scans_used", "7");
+    markCookFreeScansUsedUp();
+    expect(getScansUsed()).toBe(7);
   });
 
   it("migrates legacy remaining-count key to used-count", () => {

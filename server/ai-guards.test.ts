@@ -7,6 +7,9 @@ import { createLruCache } from "./lru-cache.mjs";
 import { runCookRecipes } from "./cook-recipes-logic.mjs";
 import { clientIp } from "./client-ip.mjs";
 import { mockFetch, openAiReply } from "./test-fetch";
+import { proQuota } from "./test-quota";
+
+const quota = proQuota();
 
 const verifyUser = async (token: string) =>
   token.startsWith("user-")
@@ -23,7 +26,7 @@ describe("per-IP limit", () => {
     for (let i = 0; i < 5; i++) {
       const res = await handleCookRecipesRequest(
         { authorization: `Bearer user-anon-${i}`, ip: "198.51.100.1", body: {} },
-        { verifyUser, limiter, ipLimiter, generate }
+        { verifyUser, limiter, ipLimiter, generate, quota }
       );
       statuses.push(res.status);
     }
@@ -37,7 +40,7 @@ describe("per-IP limit", () => {
     const limiter = createTokenBucketLimiter({ capacity: 10, refillIntervalMs: 1_000 });
     const generate = async () => ({ recipes: [] });
     const call = (ip: string) =>
-      handleCookRecipesRequest({ authorization: "Bearer user-1", ip, body: {} }, { verifyUser, limiter, ipLimiter, generate });
+      handleCookRecipesRequest({ authorization: "Bearer user-1", ip, body: {} }, { verifyUser, limiter, ipLimiter, generate, quota });
 
     expect((await call("198.51.100.1")).status).toBe(200);
     expect((await call("198.51.100.1")).status).toBe(429);
@@ -52,13 +55,13 @@ describe("shared per-user bucket", () => {
     const auth = { authorization: "Bearer user-1", ip: "198.51.100.1", body: {} };
 
     const vision = await handleFridgeVisionRequest(auth, {
-      verifyUser, userLimiter, ipLimiter, analyze: async () => ({ ingredients: ["eggs"] }),
+      verifyUser, userLimiter, ipLimiter, quota, analyze: async () => ({ ingredients: ["eggs"] }),
     });
     const recipes = await handleCookRecipesRequest(auth, {
-      verifyUser, limiter: userLimiter, ipLimiter, generate: async () => ({ recipes: [] }),
+      verifyUser, limiter: userLimiter, ipLimiter, quota, generate: async () => ({ recipes: [] }),
     });
     const third = await handleCookRecipesRequest(auth, {
-      verifyUser, limiter: userLimiter, ipLimiter, generate: async () => ({ recipes: [] }),
+      verifyUser, limiter: userLimiter, ipLimiter, quota, generate: async () => ({ recipes: [] }),
     });
 
     expect([vision.status, recipes.status, third.status]).toEqual([200, 200, 429]);
@@ -102,6 +105,7 @@ describe("daily cap on recipes", () => {
       limiter: createTokenBucketLimiter({ capacity: 10, refillIntervalMs: 1_000 }),
       ipLimiter: createTokenBucketLimiter({ capacity: 10, refillIntervalMs: 1_000 }),
       generate,
+      quota,
     };
     const call = (ingredients: string[]) =>
       handleCookRecipesRequest({ authorization: "Bearer user-1", ip: "198.51.100.1", body: { ingredients } }, limits);

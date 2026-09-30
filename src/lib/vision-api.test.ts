@@ -12,6 +12,7 @@ vi.mock("@/lib/compressImageDataUrl", () => ({
 }));
 
 import { scanFoodNutrition, scanFridgeIngredients, VisionScanError, VISION_MESSAGES } from "./vision-api";
+import { FREE_SCANS_USED_MESSAGE, FreeScansUsedError } from "./freeScansError";
 
 const PHOTO = "data:image/jpeg;base64,/9j/4AAQSkZJRg==";
 const fetchMock = vi.fn();
@@ -163,5 +164,30 @@ describe("scanFoodNutrition", () => {
     fetchMock.mockResolvedValue(jsonResponse(503, { error: "ChefCoach is busy right now, try again later." }));
     const err = await scanError(scanFoodNutrition(PHOTO));
     expect(err.kind).toBe("busy");
+  });
+});
+
+describe("402 free scans used", () => {
+  const body = { error: "You've used your 3 free Track scans. Upgrade to Pro for unlimited scans.", code: "free_scans_used" };
+
+  it("food scan → FreeScansUsedError('track') with the server's message", async () => {
+    fetchMock.mockResolvedValue(jsonResponse(402, body));
+    const err = await scanFoodNutrition(PHOTO).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(FreeScansUsedError);
+    expect((err as FreeScansUsedError).kind).toBe("track");
+    expect((err as FreeScansUsedError).message).toBe(body.error);
+  });
+
+  it("fridge scan → FreeScansUsedError('cook')", async () => {
+    fetchMock.mockResolvedValue(jsonResponse(402, { error: "used" }));
+    const err = await scanFridgeIngredients(PHOTO, null).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(FreeScansUsedError);
+    expect((err as FreeScansUsedError).kind).toBe("cook");
+  });
+
+  it("uses a default message when the body is not JSON", async () => {
+    fetchMock.mockResolvedValue(new Response("nope", { status: 402 }));
+    const err = await scanFoodNutrition(PHOTO).catch((e: unknown) => e);
+    expect((err as FreeScansUsedError).message).toBe(FREE_SCANS_USED_MESSAGE);
   });
 });
